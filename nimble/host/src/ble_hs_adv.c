@@ -392,6 +392,12 @@ adv_set_fields(const struct ble_hs_adv_fields *adv_fields,
         rc = ble_hs_adv_set_array_uuid128(BLE_HS_ADV_TYPE_SOL_UUIDS128, adv_fields->sol_num_uuids128,
                                           adv_fields->sol_uuids128, dst, &dst_len_local,
                                           max_len, om);
+    /*** 0x30 - Broadcast name. */
+    if (adv_fields->broadcast_name != NULL && adv_fields->broadcast_name_len > 0) {
+        rc = ble_hs_adv_set_flat_mbuf(BLE_HS_ADV_TYPE_BROADCAST_NAME,
+                                      adv_fields->broadcast_name_len,
+                                      adv_fields->broadcast_name, dst,
+                                      &dst_len_local, max_len, om);
         if (rc != 0) {
             return rc;
         }

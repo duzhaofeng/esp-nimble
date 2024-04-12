@@ -32,6 +32,9 @@ pkg.deps:
     - nimble
     - nimble/transport
 
+pkg.deps.BLE_AUDIO:
+    - nimble/host/audio
+
 pkg.deps.BLE_SM_LEGACY:
     - "@apache-mynewt-core/crypto/tinycrypt"
 
@@ -40,6 +43,9 @@ pkg.deps.BLE_SM_SC:
 
 pkg.deps.BLE_MESH:
     - nimble/host/mesh
+
+pkg.deps.BLE_EATT_CHAN_NUM:
+    - nimble/host/services/gatt
 
 pkg.req_apis:
     - ble_transport

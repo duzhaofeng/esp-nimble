@@ -45,7 +45,7 @@ cmd_gatt_discover_characteristic(int argc, char **argv)
     ble_uuid_any_t uuid;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -56,7 +56,7 @@ cmd_gatt_discover_characteristic(int argc, char **argv)
         return rc;
     }
 
-    rc = parse_arg_uuid("uuid", &uuid);
+    rc = parse_arg_ble_uuid("uuid", &uuid);
     if (rc == 0) {
         rc = btshell_disc_chrs_by_uuid(conn_handle, start_handle, end_handle,
                                        &uuid.u);
@@ -82,7 +82,7 @@ cmd_gatt_discover_descriptor(int argc, char **argv)
     uint16_t end_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -109,7 +109,7 @@ cmd_gatt_discover_service(int argc, char **argv)
     int conn_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -120,7 +120,7 @@ cmd_gatt_discover_service(int argc, char **argv)
         return rc;
     }
 
-    rc = parse_arg_uuid("uuid", &uuid);
+    rc = parse_arg_ble_uuid("uuid", &uuid);
     if (rc == 0) {
         rc = btshell_disc_svc_by_uuid(conn_handle, &uuid.u);
     } else if (rc == ENOENT) {
@@ -144,7 +144,7 @@ cmd_gatt_discover_full(int argc, char **argv)
     int conn_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -174,7 +174,7 @@ cmd_gatt_exchange_mtu(int argc, char **argv)
     uint16_t conn_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -204,7 +204,7 @@ cmd_gatt_notify(int argc, char **argv)
     uint16_t attr_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -238,9 +238,10 @@ cmd_gatt_read(int argc, char **argv)
     uint8_t num_attr_handles;
     int is_uuid;
     int is_long;
+    bool is_var;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -259,6 +260,12 @@ cmd_gatt_read(int argc, char **argv)
         return rc;
     }
 
+    is_var = parse_arg_bool_dflt("variable", 0, &rc);
+    if (rc != 0) {
+        console_printf("invalid 'variable' parameter\n");
+        return rc;
+    }
+
     for (num_attr_handles = 0;
          num_attr_handles < CMD_READ_MAX_ATTRS;
          num_attr_handles++) {
@@ -272,7 +279,7 @@ cmd_gatt_read(int argc, char **argv)
         }
     }
 
-    rc = parse_arg_uuid("uuid", &uuid);
+    rc = parse_arg_ble_uuid("uuid", &uuid);
     if (rc == ENOENT) {
         is_uuid = 0;
     } else if (rc == 0) {
@@ -313,7 +320,7 @@ cmd_gatt_read(int argc, char **argv)
             rc = btshell_read(conn_handle, attr_handles[0]);
         }
     } else if (num_attr_handles > 1) {
-        rc = btshell_read_mult(conn_handle, attr_handles, num_attr_handles);
+        rc = btshell_read_mult(conn_handle, attr_handles, num_attr_handles, is_var);
     } else if (is_uuid) {
         if (start == 0 || end == 0) {
             rc = EINVAL;
@@ -344,7 +351,7 @@ cmd_gatt_service_changed(int argc, char **argv)
     uint16_t end;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -377,7 +384,7 @@ cmd_gatt_service_visibility(int argc, char **argv)
     bool vis;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -411,7 +418,7 @@ cmd_gatt_find_included_services(int argc, char **argv)
     uint16_t end_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -475,13 +482,13 @@ cmd_gatt_write(int argc, char **argv)
     uint16_t offset;
     int total_attr_len;
     int num_attrs;
-    int attr_len;
+    unsigned int attr_len;
     int is_long;
     int no_rsp;
     int rc;
     int i;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -584,4 +591,76 @@ done:
     }
 
     return rc;
+}
+
+int
+cmd_gatt_enqueue_notif(int argc, char **argv)
+{
+#if MYNEWT_VAL(BLE_GATT_NOTIFY_MULTIPLE)
+    int rc;
+    uint16_t handle;
+    unsigned int len;
+    uint8_t value[BLE_ATT_ATTR_MAX_LEN];
+
+    rc = parse_arg_init(argc - 1, argv + 1);
+    if (rc != 0) {
+        return rc;
+    }
+
+    handle = parse_arg_uint16("handle", &rc);
+    if (rc != 0) {
+        console_printf("invalid 'handle' parameter\n");
+        return rc;
+    }
+
+    if (argc > 1) {
+        rc = parse_arg_byte_stream("value", BLE_ATT_ATTR_MAX_LEN, value, &len);
+        if (rc != 0) {
+            console_printf("invalid 'value' parameter\n");
+            return rc;
+        }
+        return btshell_enqueue_notif(handle, len, value);
+    } else {
+        return btshell_enqueue_notif(handle, 0, NULL);
+    }
+#else
+    console_printf("To enable this features set BLE_GATT_NOTIFY_MULTIPLE\n");
+    return ENOTSUP;
+#endif
+}
+
+int
+cmd_gatt_send_pending_notif(int argc, char **argv)
+{
+#if MYNEWT_VAL(BLE_GATT_NOTIFY_MULTIPLE)
+    uint16_t conn_handle;
+    int rc;
+
+    rc = parse_arg_init(argc - 1, argv + 1);
+    if (rc != 0) {
+        return rc;
+    }
+
+    conn_handle = parse_arg_uint16("conn", &rc);
+    if (rc != 0) {
+        console_printf("invalid 'conn' parameter\n");
+        return rc;
+    }
+
+    return btshell_send_pending_notif(conn_handle);
+#else
+    console_printf("To enable this features set BLE_GATT_NOTIFY_MULTIPLE\n");
+    return ENOTSUP;
+#endif
+}
+
+int
+cmd_gatt_clear_pending_notif(int argc, char **argv)
+{
+#if MYNEWT_VAL(BLE_GATT_NOTIFY_MULTIPLE)
+    return btshell_clear_pending_notif();
+#else
+    console_printf("To enable this features set BLE_GATT_NOTIFY_MULTIPLE\n");
+    return ENOTSUP;
+#endif
 }

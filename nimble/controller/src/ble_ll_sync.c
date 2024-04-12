@@ -228,7 +228,7 @@ ble_ll_sync_sm_clear(struct ble_ll_sync_sm *sm)
 static uint8_t
 ble_ll_sync_phy_mode_to_hci(int8_t phy_mode)
 {
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
     switch (phy_mode) {
     case BLE_PHY_MODE_1M:
         return BLE_HCI_LE_PHY_1M;
@@ -475,7 +475,7 @@ ble_ll_sync_event_start_cb(struct ble_ll_sched_item *sch)
     ble_phy_encrypt_disable();
 #endif
 
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
     ble_phy_mode_set(sm->phy_mode, sm->phy_mode);
 #endif
 
@@ -1136,7 +1136,7 @@ ble_ll_sync_rx_pkt_in(struct os_mbuf *rxpdu, struct ble_mbuf_hdr *hdr)
     int8_t tx_power = 127; /* defaults to not available */
     uint8_t *aux = NULL;
     uint8_t *acad = NULL;
-    uint8_t acad_len;
+    uint8_t acad_len = 0;
     const uint8_t *biginfo = NULL;
     uint8_t biginfo_len = 0;
     int datalen;

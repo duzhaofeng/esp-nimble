@@ -151,25 +151,25 @@ ble_ll_sched_preempt(struct ble_ll_sched_item *sch,
                 break;
 #endif
 #if MYNEWT_VAL(BLE_LL_ROLE_BROADCASTER)
-            case BLE_LL_SCHED_TYPE_ADV:
-                ble_ll_adv_event_rmvd_from_sched(entry->cb_arg);
-                break;
+        case BLE_LL_SCHED_TYPE_ADV:
+            ble_ll_adv_preempted(entry->cb_arg);
+            break;
 #endif
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV) && MYNEWT_VAL(BLE_LL_ROLE_OBSERVER)
             case BLE_LL_SCHED_TYPE_SCAN_AUX:
                 ble_ll_scan_aux_break(entry->cb_arg);
                 break;
+#endif
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
 #if MYNEWT_VAL(BLE_LL_ROLE_BROADCASTER)
             case BLE_LL_SCHED_TYPE_PERIODIC:
                 ble_ll_adv_periodic_rmvd_from_sched(entry->cb_arg);
                 break;
 #endif
-#if MYNEWT_VAL(BLE_LL_ROLE_OBSERVER)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV) && MYNEWT_VAL(BLE_LL_ROLE_OBSERVER)
             case BLE_LL_SCHED_TYPE_SYNC:
                 ble_ll_sync_rmvd_from_sched(entry->cb_arg);
                 break;
-#endif
 #endif
 #endif
 #if MYNEWT_VAL(BLE_LL_ISO_BROADCASTER)
@@ -844,14 +844,14 @@ ble_ll_sched_adv_resched_pdu(struct ble_ll_sched_item *sch)
 
 #if MYNEWT_VAL(BLE_LL_ISO_BROADCASTER)
 int
-ble_ll_sched_iso_big(struct ble_ll_sched_item *sch, int first)
+ble_ll_sched_iso_big(struct ble_ll_sched_item *sch, int first, int fixed)
 {
     os_sr_t sr;
     int rc;
 
     OS_ENTER_CRITICAL(sr);
 
-    if (first) {
+    if (first && !fixed) {
         rc = ble_ll_sched_insert(sch, BLE_LL_SCHED_MAX_DELAY_ANY, preempt_none);
     } else {
         /* XXX provide better strategy for preemption */

@@ -320,6 +320,7 @@ STATS_NAME_START(ble_ll_stats)
     STATS_NAME(ble_ll_stats, rx_connect_reqs)
     STATS_NAME(ble_ll_stats, rx_scan_ind)
     STATS_NAME(ble_ll_stats, rx_aux_connect_rsp)
+    STATS_NAME(ble_ll_stats, rx_pdu_on_scan_disabled)
     STATS_NAME(ble_ll_stats, adv_txg)
     STATS_NAME(ble_ll_stats, adv_late_starts)
     STATS_NAME(ble_ll_stats, adv_resched_pdu_fail)
@@ -1370,9 +1371,6 @@ ble_ll_task(void *arg)
                                                   MYNEWT_VAL(BLE_LL_TX_PWR_MAX_DBM)));
     g_ble_ll_tx_power_phy_current = INT8_MAX;
 
-    /* Tell the host that we are ready to receive packets */
-    ble_ll_hci_send_noop();
-
     while (1) {
         ev = ble_npl_eventq_get(&g_ble_ll_data.ll_evq, BLE_NPL_TIME_FOREVER);
         BLE_LL_ASSERT(ev);
@@ -1766,7 +1764,7 @@ ble_ll_assert(const char *file, unsigned line)
  *
  * @return int
  */
-static void
+void
 ble_ll_init(void)
 {
     int rc;
@@ -1924,18 +1922,17 @@ ble_ll_init(void)
     features |= BLE_LL_FEAT_SCA_UPDATE;
 #endif
 
-#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_ISO)
-    features |= BLE_LL_FEAT_CIS_CENTRAL;
-    features |= BLE_LL_FEAT_CIS_PERIPH;
-    features |= BLE_LL_FEAT_CIS_HOST;
-#endif
-
 #if MYNEWT_VAL(BLE_LL_ISO_BROADCASTER)
     features |= BLE_LL_FEAT_ISO_BROADCASTER;
 #endif
 
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_ENHANCED_CONN_UPDATE)
     features |= BLE_LL_FEAT_CONN_SUBRATING;
+#endif
+
+#if MYNEWT_VAL(BLE_LL_CHANNEL_SOUNDING)
+    features |= BLE_LL_FEAT_CS;
+    features |= BLE_LL_FEAT_CS_PCT_QUALITY_IND;
 #endif
 
     lldata->ll_supp_features = features;
@@ -2008,7 +2005,8 @@ ble_transport_to_ll_iso_impl(struct os_mbuf *om)
 void
 ble_transport_ll_init(void)
 {
-    ble_ll_init();
+    /* Tell the host that we are ready to receive packets */
+    ble_ll_hci_send_noop();
 }
 
 int

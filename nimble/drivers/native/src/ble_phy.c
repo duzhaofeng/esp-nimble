@@ -281,7 +281,7 @@ ble_phy_isr(void)
         ble_hdr->rxinfo.channel = g_ble_phy_data.phy_chan;
         ble_hdr->rxinfo.phy = BLE_PHY_1M;
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
-        ble_hdr->rxinfo.aux_data = NULL;
+        ble_hdr->rxinfo.user_data = NULL;
 #endif
 
         /* Count PHY valid packets */
@@ -344,6 +344,11 @@ ble_phy_restart_rx(void)
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
 void
 ble_phy_encrypt_enable(const uint8_t *key)
+{
+}
+
+void
+ble_phy_encrypt_header_mask_set(uint8_t mask)
 {
 }
 
@@ -649,5 +654,10 @@ ble_phy_rfclk_enable(void)
 
 void
 ble_phy_rfclk_disable(void)
+{
+}
+
+void
+ble_phy_tifs_txtx_set(uint16_t usecs, uint8_t anchor)
 {
 }

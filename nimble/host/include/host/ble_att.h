@@ -112,6 +112,9 @@ struct os_mbuf;
 #define BLE_ATT_ERR_DB_OUT_OF_SYNC          0x12
 #define BLE_ATT_ERR_VALUE_NOT_ALLOWED       0x13
 
+/**Requested value is not allowed. */
+#define BLE_ATT_ERR_VALUE_NOT_ALLOWED       0x13
+
 /** @} */
 
 /**
@@ -205,6 +208,14 @@ struct os_mbuf;
 /** Indicate Response. */
 #define BLE_ATT_OP_INDICATE_RSP             0x1e
 
+/** Read Multiple Variable Lenght Request */
+#define BLE_ATT_OP_READ_MULT_VAR_REQ        0x20
+
+/** Read Multiple Variable Lenght Response */
+#define BLE_ATT_OP_READ_MULT_VAR_RSP        0x21
+
+/** Notify Multiple Request */
+#define BLE_ATT_OP_NOTIFY_MULTI_REQ         0x23
 /** Write Command. */
 #define BLE_ATT_OP_WRITE_CMD                0x52
 #define BLE_ATT_OP_SIGNED_WRITE_CMD         0xD2

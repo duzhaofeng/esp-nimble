@@ -28,6 +28,9 @@
 
 #include "host/ble_gatt.h"
 #include "host/ble_gap.h"
+#if (MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE))
+#include "audio/ble_audio_broadcast_source.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,8 +90,9 @@ struct btshell_conn {
 
 struct btshell_scan_opts {
     uint16_t limit;
-    uint8_t ignore_legacy:1;
-    uint8_t periodic_only:1;
+    uint8_t ignore_legacy : 1;
+    uint8_t periodic_only : 1;
+    uint8_t silent : 1;
     uint8_t name_filter_len;
     char name_filter[NAME_FILTER_LEN_MAX];
 };
@@ -100,22 +104,22 @@ int btshell_exchange_mtu(uint16_t conn_handle);
 int btshell_disc_svcs(uint16_t conn_handle);
 int btshell_disc_svc_by_uuid(uint16_t conn_handle, const ble_uuid_t *uuid);
 int btshell_disc_all_chrs(uint16_t conn_handle, uint16_t start_handle,
-                           uint16_t end_handle);
+                          uint16_t end_handle);
 int btshell_disc_all_chrs_in_svc(uint16_t conn_handle, struct btshell_svc *svc);
 int btshell_disc_chrs_by_uuid(uint16_t conn_handle, uint16_t start_handle,
-                               uint16_t end_handle, const ble_uuid_t *uuid);
+                              uint16_t end_handle, const ble_uuid_t *uuid);
 int btshell_disc_all_dscs(uint16_t conn_handle, uint16_t start_handle,
                           uint16_t end_handle);
 int btshell_disc_full(uint16_t conn_handle);
 int btshell_find_inc_svcs(uint16_t conn_handle, uint16_t start_handle,
-                           uint16_t end_handle);
+                          uint16_t end_handle);
 int btshell_read(uint16_t conn_handle, uint16_t attr_handle);
 int btshell_read_long(uint16_t conn_handle, uint16_t attr_handle,
                       uint16_t offset);
 int btshell_read_by_uuid(uint16_t conn_handle, uint16_t start_handle,
-                          uint16_t end_handle, const ble_uuid_t *uuid);
+                         uint16_t end_handle, const ble_uuid_t *uuid);
 int btshell_read_mult(uint16_t conn_handle, uint16_t *attr_handles,
-                       int num_attr_handles);
+                      int num_attr_handles, bool variable);
 int btshell_write(uint16_t conn_handle, uint16_t attr_handle,
                   struct os_mbuf *om);
 int btshell_write_no_rsp(uint16_t conn_handle, uint16_t attr_handle,
@@ -124,6 +128,12 @@ int btshell_write_long(uint16_t conn_handle, uint16_t attr_handle,
                        uint16_t offset, struct os_mbuf *om);
 int btshell_write_reliable(uint16_t conn_handle,
                            struct ble_gatt_attr *attrs, int num_attrs);
+#if MYNEWT_VAL(BLE_GATT_NOTIFY_MULTIPLE)
+int btshell_enqueue_notif(uint16_t handle, uint16_t len, uint8_t *value);
+int btshell_send_pending_notif(uint16_t conn_handle);
+int btshell_clear_pending_notif(void);
+#endif
+
 #if MYNEWT_VAL(BLE_EXT_ADV)
 int btshell_ext_adv_configure(uint8_t instance,
                               const struct ble_gap_ext_adv_params *params,
@@ -181,6 +191,36 @@ int btshell_l2cap_disconnect(uint16_t conn, uint16_t idx);
 int btshell_l2cap_send(uint16_t conn, uint16_t idx, uint16_t bytes);
 int btshell_l2cap_reconfig(uint16_t conn_handle, uint16_t mtu,
                            uint8_t num, uint8_t idxs[]);
+
+#if (MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE))
+int btshell_broadcast_base_add(uint8_t adv_instance, uint32_t presentation_delay);
+int btshell_broadcast_big_sub_add(uint8_t adv_instance,
+                                  uint8_t codec_fmt,
+                                  uint16_t company_id,
+                                  uint16_t vendor_spec,
+                                  uint8_t *metadata,
+                                  unsigned int metadata_len,
+                                  uint8_t *codec_spec_cfg,
+                                  unsigned int codec_spec_cfg_len);
+int btshell_broadcast_bis_add(uint8_t adv_instance,
+                              uint8_t *codec_spec_cfg,
+                              unsigned int codec_spec_cfg_len);
+int btshell_broadcast_create(uint8_t adv_instance,
+                             struct ble_gap_ext_adv_params *ext_params,
+                             struct ble_gap_periodic_adv_params
+                             *per_params,
+                             const char *name,
+                             struct ble_iso_big_params big_params,
+                             uint8_t *extra_data,
+                             unsigned int extra_data_len);
+int btshell_broadcast_destroy(uint8_t adv_instance);
+int btshell_broadcast_update(uint8_t adv_instance,
+                             const char *name,
+                             uint8_t *extra_data,
+                             unsigned int extra_data_len);
+int btshell_broadcast_start(uint8_t adv_instance);
+int btshell_broadcast_stop(uint8_t adv_instance);
+#endif
 
 int btshell_gap_event(struct ble_gap_event *event, void *arg);
 void btshell_sync_stats(uint16_t handle);

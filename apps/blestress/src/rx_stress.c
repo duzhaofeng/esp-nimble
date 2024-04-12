@@ -1212,7 +1212,7 @@ static struct rx_stress_adv_set rx_stress_adv_sets[] = {
     },
     {
         .instance = SWITCHER_INSTANCE,
-        .instance_uuid128 = rx_stress_uuid128[0],
+        .instance_uuid128 = rx_stress_uuid128[1],
         .legacy_pdu = LEGACY_ADVERT,
         .cb = rx_stress_0_gap_event,
         .pattern_data = NULL,
@@ -1344,6 +1344,12 @@ rx_stress_start(int test_num)
 
     /* Start test. */
     switch (test_num) {
+    case 0:
+        return;
+    case 1:
+        console_printf("Nothing to do");
+        rx_stress_simple_adv(&rx_stress_adv_sets[1]);
+        return;
     case 2:
         console_printf("Stress Connect/Disconnect legacy\033[0m\n");
         rx_stress_simple_adv(&rx_stress_adv_sets[2]);
@@ -1459,13 +1465,7 @@ rx_stress_main_task_fn(void *arg)
     os_sem_pend(&rx_stress_main_sem, OS_TIMEOUT_NEVER);
 
     /* Standard tests perform */
-    for (i = 11; i < STRESS_UUIDS_NUM; ++i) {
-        if (i == 7 || i == 8 || i == 13) {
-            /* 7,8: PHY update tests cause that the device during the next test
-             * will stuck somewhere and will reset. Skip them for now.
-             * 13: Should work after fixing ble_gatts_notify_custom (nimble issue on GitHub)*/
-            continue;
-        }
+    for (i = 1; i < STRESS_UUIDS_NUM; ++i) {
         /* Start test. */
         rx_stress_start(i);
     }

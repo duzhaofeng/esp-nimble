@@ -257,6 +257,11 @@ npl_freertos_callout_mem_reset(struct ble_npl_callout *co)
     ble_npl_event_reset(&callout->ev);
 }
 
+/* Include the file that defines the SCB for your HW. */
+#ifdef NIMBLE_NPL_OS_EXTRA_INCLUDE
+#include NIMBLE_NPL_OS_EXTRA_INCLUDE
+#endif
+
 static inline bool
 in_isr(void)
 {

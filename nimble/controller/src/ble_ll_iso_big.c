@@ -144,6 +144,10 @@ struct ble_ll_iso_big {
 
     struct ble_ll_iso_bis_q bis_q;
 
+#if MYNEWT_VAL(BLE_LL_ISO_HCI_FEEDBACK_INTERVAL_MS)
+    uint32_t last_feedback;
+#endif
+
     uint8_t cstf : 1;
     uint8_t cssn : 4;
     uint8_t control_active : 3;
@@ -398,8 +402,16 @@ ble_ll_iso_big_event_done(struct ble_ll_iso_big *big)
 {
     struct ble_ll_iso_bis *bis;
     struct ble_hci_ev *hci_ev;
-    struct ble_hci_ev_num_comp_pkts *hci_ev_ncp;
+#if MYNEWT_VAL(BLE_LL_ISO_HCI_FEEDBACK_INTERVAL_MS)
+    struct ble_hci_ev *fb_hci_ev = NULL;
+    struct ble_hci_ev_vs *fb_hci_ev_vs;
+    struct ble_hci_vs_subev_iso_hci_feedback *fb_hci_subev = NULL;
+    uint16_t exp;
+    uint32_t now;
+#endif
+    struct ble_hci_ev_num_comp_pkts *hci_ev_ncp = NULL;
     int num_completed_pkt;
+    int idx;
     int rc;
 
     ble_ll_rfmgmt_release();
@@ -417,18 +429,49 @@ ble_ll_iso_big_event_done(struct ble_ll_iso_big *big)
         hci_ev_ncp->count = 0;
     }
 
+#if MYNEWT_VAL(BLE_LL_ISO_HCI_FEEDBACK_INTERVAL_MS)
+    now = os_time_get();
+    if (OS_TIME_TICK_GEQ(now, big->last_feedback +
+                              os_time_ms_to_ticks32(MYNEWT_VAL(BLE_LL_ISO_HCI_FEEDBACK_INTERVAL_MS)))) {
+        fb_hci_ev = ble_transport_alloc_evt(1);
+        if (fb_hci_ev) {
+            fb_hci_ev->opcode = BLE_HCI_EVCODE_VS;
+            fb_hci_ev->length = sizeof(*fb_hci_ev_vs) + sizeof(*fb_hci_subev);
+            fb_hci_ev_vs = (void *)fb_hci_ev->data;
+            fb_hci_ev_vs->id = BLE_HCI_VS_SUBEV_ISO_HCI_FEEDBACK;
+            fb_hci_subev = (void *)fb_hci_ev_vs->data;
+            fb_hci_subev->big_handle = big->handle;
+            fb_hci_subev->count = 0;
+        }
+    }
+#endif
+
     STAILQ_FOREACH(bis, &big->bis_q, bis_q_next) {
         num_completed_pkt = ble_ll_isoal_mux_event_done(&bis->mux);
         if (hci_ev && num_completed_pkt) {
-            hci_ev_ncp->completed[hci_ev_ncp->count].handle =
-                htole16(bis->conn_handle);
-            hci_ev_ncp->completed[hci_ev_ncp->count].packets =
-                htole16(num_completed_pkt + bis->num_completed_pkt);
+            idx = hci_ev_ncp->count++;
+            hci_ev_ncp->completed[idx].handle = htole16(bis->conn_handle);
+            hci_ev_ncp->completed[idx].packets = htole16(num_completed_pkt +
+                                                         bis->num_completed_pkt);
             bis->num_completed_pkt = 0;
-            hci_ev_ncp->count++;
         } else {
             bis->num_completed_pkt += num_completed_pkt;
         }
+
+#if MYNEWT_VAL(BLE_LL_ISO_HCI_FEEDBACK_INTERVAL_MS)
+        if (fb_hci_ev) {
+            /* Expected SDUs in queue after an event -> host should send
+             * sdu_per_interval SDUs until next event so there are sdu_per_event
+             * SDUs queued at next event. Feedback value is the difference between
+             * expected and actual SDUs count.
+             */
+            exp = bis->mux.sdu_per_event - bis->mux.sdu_per_interval;
+            idx = fb_hci_subev->count++;
+            fb_hci_subev->feedback[idx].handle = htole16(bis->conn_handle);
+            fb_hci_subev->feedback[idx].sdu_per_interval = bis->mux.sdu_per_interval;
+            fb_hci_subev->feedback[idx].diff = (int8_t)(bis->mux.sdu_q_len - exp);
+        }
+#endif
     }
 
     if (hci_ev) {
@@ -440,6 +483,15 @@ ble_ll_iso_big_event_done(struct ble_ll_iso_big *big)
             ble_transport_free(hci_ev);
         }
     }
+
+#if MYNEWT_VAL(BLE_LL_ISO_HCI_FEEDBACK_INTERVAL_MS)
+    if (fb_hci_ev) {
+        fb_hci_ev->length = sizeof(*fb_hci_ev_vs) + sizeof(*fb_hci_subev) +
+                            fb_hci_subev->count * sizeof(fb_hci_subev->feedback[0]);
+        ble_transport_to_hs_evt(fb_hci_ev);
+        big->last_feedback = now;
+    }
+#endif
 
     big->sch.start_time = big->event_start;
     big->sch.remainder = big->event_start_us;
@@ -498,7 +550,7 @@ ble_ll_iso_big_event_done(struct ble_ll_iso_big *big)
         }
 
         /* XXX this should always succeed since we preempt anything for now */
-        rc = ble_ll_sched_iso_big(&big->sch, 0);
+        rc = ble_ll_sched_iso_big(&big->sch, 0, 0);
         assert(rc == 0);
     } while (rc < 0);
 
@@ -741,7 +793,7 @@ ble_ll_iso_big_event_sched_cb(struct ble_ll_sched_item *sch)
 {
     struct ble_ll_iso_big *big;
     struct ble_ll_iso_bis *bis;
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
     uint8_t phy_mode;
 #endif
     int rc;
@@ -755,10 +807,12 @@ ble_ll_iso_big_event_sched_cb(struct ble_ll_sched_item *sch)
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
     ble_phy_resolv_list_disable();
 #endif
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
     phy_mode = ble_ll_phy_to_phy_mode(big->phy, 0);
     ble_phy_mode_set(phy_mode, phy_mode);
 #endif
+
+    ble_ll_tx_power_set(g_ble_ll_tx_power);
 
     BLE_LL_ASSERT(!big->framed);
 
@@ -1029,18 +1083,36 @@ ble_ll_iso_big_create(uint8_t big_handle, uint8_t adv_handle, uint8_t num_bis,
      * not enough for some phys to run scheduler item.
      */
 
-    /* Schedule 1st event a bit in future */
-    /* FIXME schedule 6ms in the future to avoid conflict with periodic
-     *       advertising when both are started at the same time; we should
-     *       select this value in some smart way later...
-     */
-    big->sch.start_time = ble_ll_tmr_get() + ble_ll_tmr_u2t(6000);
+    uint32_t start_time, end_time, big_time;
+    uint32_t sync_delay_ticks = ble_ll_tmr_u2t_up(big->sync_delay);
+    uint32_t iso_interval_ticks = ble_ll_tmr_u2t_up(big->iso_interval * 1250);
+    int big_event_fixed;
+
+    rc = ble_ll_adv_sync_sched_get(big->advsm, &start_time, &end_time);
+    if (rc) {
+        /* Set 1st BIG one interval after "now", this ensures it's always
+         * scheduled in the future.
+         */
+        big_time = ble_ll_tmr_get() + iso_interval_ticks;
+        big_event_fixed = 0;
+    } else {
+        /* Set 1st BIG event directly before periodic advertising event, this
+         * way it will not overlap it even if periodic advertising data changes.
+         * Make sure it's in the future.
+         */
+        big_time = start_time - g_ble_ll_sched_offset_ticks - sync_delay_ticks - 1;
+        while (big_time - g_ble_ll_sched_offset_ticks < ble_ll_tmr_get()) {
+            big_time += iso_interval_ticks;
+        }
+        big_event_fixed = 1;
+    }
+
+    big->sch.start_time = big_time;
     big->sch.remainder = 0;
-    big->sch.end_time = big->sch.start_time +
-                        ble_ll_tmr_u2t_up(big->sync_delay) + 1;
+    big->sch.end_time = big->sch.start_time + sync_delay_ticks + 1;
     big->sch.start_time -= g_ble_ll_sched_offset_ticks;
 
-    rc = ble_ll_sched_iso_big(&big->sch, 1);
+    rc = ble_ll_sched_iso_big(&big->sch, 1, big_event_fixed);
     if (rc < 0) {
         ble_ll_iso_big_free(big);
         return -EFAULT;

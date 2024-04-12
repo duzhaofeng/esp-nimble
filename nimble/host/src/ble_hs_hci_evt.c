@@ -23,6 +23,7 @@
 #include "os/os.h"
 #include "nimble/hci_common.h"
 #include "host/ble_gap.h"
+#include "host/ble_iso.h"
 #include "ble_hs_priv.h"
 #include "ble_hs_resolv_priv.h"
 #include "esp_nimble_mem.h"
@@ -48,6 +49,10 @@ static uint16_t ble_adv_list_count;
 #define  BLE_ADV_LIST_MAX_LENGTH    50 
 #define  BLE_ADV_LIST_MAX_COUNT     200
 #endif    
+#include "ble_iso_priv.h"
+#if MYNEWT_VAL(BLE_CHANNEL_SOUNDING)
+#include "ble_cs_priv.h"
+#endif
 
 _Static_assert(sizeof (struct hci_data_hdr) == BLE_HCI_DATA_HDR_SZ,
                "struct hci_data_hdr must be 4 bytes");
@@ -91,6 +96,14 @@ static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_periodic_adv_rpt;
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_periodic_adv_sync_lost;
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_scan_req_rcvd;
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_periodic_adv_sync_transfer;
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE)
+static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_create_big_complete;
+static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_terminate_big_complete;
+#endif
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SINK)
+static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_big_sync_established;
+static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_big_sync_lost;
+#endif
 #if MYNEWT_VAL(BLE_PERIODIC_ADV_SYNC_BIGINFO_REPORTS)
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_biginfo_adv_report;
 #endif
@@ -164,6 +177,18 @@ static ble_hs_hci_evt_le_fn * const ble_hs_hci_evt_le_dispatch[] = {
     [BLE_HCI_LE_SUBEV_ADV_SET_TERMINATED] = ble_hs_hci_evt_le_adv_set_terminated,
     [BLE_HCI_LE_SUBEV_SCAN_REQ_RCVD] = ble_hs_hci_evt_le_scan_req_rcvd,
     [BLE_HCI_LE_SUBEV_PERIODIC_ADV_SYNC_TRANSFER] = ble_hs_hci_evt_le_periodic_adv_sync_transfer,
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE)
+    [BLE_HCI_LE_SUBEV_CREATE_BIG_COMPLETE] =
+        ble_hs_hci_evt_le_create_big_complete,
+    [BLE_HCI_LE_SUBEV_TERMINATE_BIG_COMPLETE] =
+        ble_hs_hci_evt_le_terminate_big_complete,
+#endif
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SINK)
+    [BLE_HCI_LE_SUBEV_BIG_SYNC_ESTABLISHED] =
+        ble_hs_hci_evt_le_big_sync_established,
+    [BLE_HCI_LE_SUBEV_BIG_SYNC_LOST] =
+        ble_hs_hci_evt_le_big_sync_lost,
+#endif
 #if MYNEWT_VAL(BLE_PERIODIC_ADV_SYNC_BIGINFO_REPORTS)
     [BLE_HCI_LE_SUBEV_BIGINFO_ADV_REPORT] = ble_hs_hci_evt_le_biginfo_adv_report,
 #endif
@@ -173,6 +198,16 @@ static ble_hs_hci_evt_le_fn * const ble_hs_hci_evt_le_dispatch[] = {
 #endif
 #if MYNEWT_VAL(BLE_CONN_SUBRATING)
     [BLE_HCI_LE_SUBEV_SUBRATE_CHANGE] = ble_hs_hci_evt_le_subrate_change,
+#endif
+#if MYNEWT_VAL(BLE_CHANNEL_SOUNDING)
+    [BLE_HCI_LE_SUBEV_CS_RD_REM_SUPP_CAP_COMPLETE] = ble_hs_hci_evt_le_cs_rd_rem_supp_cap_complete,
+    [BLE_HCI_LE_SUBEV_CS_RD_REM_FAE_COMPLETE] = ble_hs_hci_evt_le_cs_rd_rem_fae_complete,
+    [BLE_HCI_LE_SUBEV_CS_SEC_ENABLE_COMPLETE] = ble_hs_hci_evt_le_cs_sec_enable_complete,
+    [BLE_HCI_LE_SUBEV_CS_CONFIG_COMPLETE] = ble_hs_hci_evt_le_cs_config_complete,
+    [BLE_HCI_LE_SUBEV_CS_PROC_ENABLE_COMPLETE] = ble_hs_hci_evt_le_cs_proc_enable_complete,
+    [BLE_HCI_LE_SUBEV_CS_SUBEVENT_RESULT] = ble_hs_hci_evt_le_cs_subevent_result,
+    [BLE_HCI_LE_SUBEV_CS_SUBEVENT_RESULT_CONTINUE] = ble_hs_hci_evt_le_cs_subevent_result_continue,
+    [BLE_HCI_LE_SUBEV_CS_TEST_END_COMPLETE] = ble_hs_hci_evt_le_cs_test_end_complete,
 #endif
 };
 
@@ -362,7 +397,9 @@ ble_hs_hci_evt_vs(uint8_t event_code, const void *data, unsigned int len)
         return BLE_HS_ECONTROLLER;
     }
 
-    ble_gap_vs_hci_event(data, len);
+#if MYNEWT_VAL(BLE_HS_GAP_UNHANDLED_HCI_EVENT)
+    ble_gap_unhandled_hci_event(false, true, data, len);
+#endif
 
     return 0;
 }
@@ -405,6 +442,10 @@ ble_hs_hci_evt_le_meta(uint8_t event_code, const void *data, unsigned int len)
     fn = ble_hs_hci_evt_le_dispatch_find(ev->subevent);
     if (fn) {
         return fn(ev->subevent, data, len);
+    } else {
+#if MYNEWT_VAL(BLE_HS_GAP_UNHANDLED_HCI_EVENT)
+        ble_gap_unhandled_hci_event(true, false, data, len);
+#endif
     }
 
     return 0;
@@ -873,6 +914,71 @@ ble_hs_hci_evt_le_periodic_adv_sync_transfer(uint8_t subevent, const void *data,
     return 0;
 }
 
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE)
+static int
+ble_hs_hci_evt_le_create_big_complete(uint8_t subevent, const void *data,
+                                      unsigned int len)
+{
+    const struct ble_hci_ev_le_subev_create_big_complete *ev = data;
+
+    if (len != sizeof(*ev) + (ev->num_bis * sizeof(ev->conn_handle[0]))) {
+        return BLE_HS_EBADDATA;
+    }
+
+    ble_iso_rx_create_big_complete(ev);
+
+    return 0;
+}
+
+static int
+ble_hs_hci_evt_le_terminate_big_complete(uint8_t subevent, const void *data,
+                                         unsigned int len)
+{
+    const struct ble_hci_ev_le_subev_terminate_big_complete *ev = data;
+
+    if (len != sizeof(*ev)) {
+        return BLE_HS_EBADDATA;
+    }
+
+    ble_iso_rx_terminate_big_complete(ev);
+
+    return 0;
+}
+#endif
+
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SINK)
+static int
+ble_hs_hci_evt_le_big_sync_established(uint8_t subevent, const void *data,
+                                       unsigned int len)
+{
+    const struct ble_hci_ev_le_subev_big_sync_established *ev = data;
+
+    if (len < sizeof(*ev) ||
+        len != (sizeof(*ev) + ev->num_bis * sizeof(ev->conn_handle[0]))) {
+        return BLE_HS_EBADDATA;
+    }
+
+    ble_iso_rx_big_sync_established(ev);
+
+    return 0;
+}
+
+static int
+ble_hs_hci_evt_le_big_sync_lost(uint8_t subevent, const void *data,
+                                unsigned int len)
+{
+    const struct ble_hci_ev_le_subev_big_sync_lost *ev = data;
+
+    if (len != sizeof(*ev)) {
+        return BLE_HS_EBADDATA;
+    }
+
+    ble_iso_rx_big_sync_lost(ev);
+
+    return 0;
+}
+#endif
+
 #if MYNEWT_VAL(BLE_PERIODIC_ADV_SYNC_BIGINFO_REPORTS)
 static int
 ble_hs_hci_evt_le_biginfo_adv_report(uint8_t subevent, const void *data,
@@ -1061,6 +1167,9 @@ ble_hs_hci_evt_process(struct ble_hci_ev *ev)
     }
 
     if (entry == NULL) {
+#if MYNEWT_VAL(BLE_HS_GAP_UNHANDLED_HCI_EVENT)
+        ble_gap_unhandled_hci_event(false, false, ev->data, ev->length);
+#endif
         STATS_INC(ble_hs_stats, hci_unknown_event);
         rc = BLE_HS_ENOTSUP;
     } else {

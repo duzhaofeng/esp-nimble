@@ -24,7 +24,11 @@
 #include "syscfg/syscfg.h"
 #include "stats/stats.h"
 #include "host/ble_hs.h"
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE)
+#include "audio/ble_audio_broadcast_source.h"
+#endif
 #include "ble_hs_priv.h"
+#include "ble_iso_priv.h"
 #include "nimble/nimble_npl.h"
 #ifndef MYNEWT
 #include "nimble/nimble_port.h"
@@ -766,6 +770,11 @@ ble_hs_init(void)
     rc = ble_l2cap_init();
     SYSINIT_PANIC_ASSERT(rc == 0);
 
+#endif
+    rc = ble_gap_init();
+    SYSINIT_PANIC_ASSERT(rc == 0);
+#if NIMBLE_BLE_CONNECT
+
     rc = ble_att_init();
     SYSINIT_PANIC_ASSERT(rc == 0);
 
@@ -783,8 +792,20 @@ ble_hs_init(void)
     rc = ble_gatts_init();
     SYSINIT_PANIC_ASSERT(rc == 0);
 #endif
-    rc = ble_gap_init();
+
+#if MYNEWT_VAL(BLE_ISO)
+    rc = ble_iso_init();
     SYSINIT_PANIC_ASSERT(rc == 0);
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE)
+    rc = ble_audio_broadcast_init();
+    SYSINIT_PANIC_ASSERT(rc == 0);
+#endif
+#endif
+
+#if MYNEWT_VAL(BLE_AUDIO_MAX_CODEC_RECORDS)
+    rc = ble_audio_codec_init();
+    SYSINIT_PANIC_ASSERT(rc == 0);
+#endif
 
     ble_hs_stop_init();
 
@@ -846,9 +867,13 @@ ble_transport_to_hs_acl_impl(struct os_mbuf *om)
 int
 ble_transport_to_hs_iso_impl(struct os_mbuf *om)
 {
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SINK)
+    return ble_iso_rx_data(om, NULL);
+#else
     os_mbuf_free_chain(om);
 
     return 0;
+#endif
 }
 
 void
