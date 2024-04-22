@@ -95,13 +95,30 @@ syscfg.defs:
         value: 0
         restrictions:
             - '(BLE_VERSION >= 52) if 1'
-
+            - '(BLE_ISO_BROADCAST_SOURCE || BLE_ISO_BROADCAST_SINK) if 1'
+    BLE_ISO_BROADCAST_SOURCE:
+        description: >
+            This enables LE Audio Broadcast Source feature
+        value: 0
+        restrictions:
+            - '(BLE_VERSION >= 52) if 1'
+    BLE_ISO_BROADCAST_SINK:
+        description: >
+            This enables LE Audio Broadcast Sink feature
+        value: 0
+        restrictions:
+            - '(BLE_VERSION >= 52) if 1'
     BLE_ISO_TEST:
         description: >
             Enables BLE ISO Testing commands
         value: 0
         restrictions:
             - 'BLE_ISO if 1'
+
+    BLE_CHANNEL_SOUNDING:
+        description: >
+            This enables Channel Sounding feature
+        value: 0
 
     BLE_HCI_VS:
         description: >
@@ -129,6 +146,23 @@ syscfg.defs:
             This enables write blob feature
         value: 1
 
+    BLE_PHY_2M:
+        description: >
+            This enables support for addtitional 2M PHY
+        value: 0
+        restrictions:
+            - 'BLE_PHY if 1'
+
+    BLE_PHY_CODED:
+        description: >
+            This enables support for addtitional CODED PHY
+        value: 0
+        restrictions:
+            - 'BLE_PHY if 1'
+
+syscfg.defs.'BLE_PHY_2M || BLE_PHY_CODED':
+    BLE_PHY: 1
+
 # Allow periodic sync transfer only if 5.1 or higher
 syscfg.restrictions:
     - "'BLE_PERIODIC_ADV_SYNC_TRANSFER == 0' || 'BLE_VERSION >= 51'"
@@ -136,3 +170,6 @@ syscfg.restrictions:
 # Enable VS HCI by default for combined or standalone controller build
 syscfg.vals.BLE_CONTROLLER:
     BLE_HCI_VS: 1
+
+syscfg.vals.'BLE_ISO_BROADCAST_SOURCE || BLE_ISO_BROADCAST_SINK':
+    BLE_ISO: 1

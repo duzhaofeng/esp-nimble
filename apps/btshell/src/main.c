@@ -41,6 +41,10 @@
 #include "host/ble_gatt.h"
 #include "host/ble_store.h"
 #include "host/ble_sm.h"
+#if MYNEWT_VAL(BLE_AUDIO)
+#include "audio/ble_audio_broadcast_source.h"
+#include "audio/ble_audio.h"
+#endif
 #include "host/util/util.h"
 
 /* Mandatory services. */
@@ -107,6 +111,11 @@ struct os_mbuf_pool sdu_os_mbuf_pool;
 static struct os_mempool sdu_coc_mbuf_mempool;
 #endif
 
+#if MYNEWT_VAL(BLE_GATT_NOTIFY_MULTIPLE)
+static struct ble_gatt_notif pending_notif[BTSHELL_MAX_CHRS];
+static size_t pending_notif_cnt;
+#endif
+
 static struct os_callout btshell_tx_timer;
 struct btshell_tx_data_s
 {
@@ -122,6 +131,57 @@ int btshell_full_disc_prev_chr_val;
 
 struct ble_sm_sc_oob_data oob_data_local;
 struct ble_sm_sc_oob_data oob_data_remote;
+
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE)
+static struct {struct ble_audio_base *base; uint8_t adv_instance;}
+btshell_base_list[MYNEWT_VAL(BLE_ISO_MAX_BIGS)];
+
+static os_membuf_t btshell_base_mem[
+    OS_MEMPOOL_SIZE(MYNEWT_VAL(BLE_ISO_MAX_BIGS),
+                    sizeof(struct ble_audio_base))
+];
+static struct os_mempool btshell_base_pool;
+
+static os_membuf_t btshell_big_params_mem[
+    OS_MEMPOOL_SIZE(MYNEWT_VAL(BLE_ISO_MAX_BIGS),
+                    sizeof(struct ble_iso_big_params))
+];
+static struct os_mempool btshell_big_params_pool;
+
+/** Mempool size: in worst case every BIS is in separate subgroup */
+static os_membuf_t btshell_big_sub_mem[
+    OS_MEMPOOL_SIZE(MYNEWT_VAL(BLE_ISO_MAX_BISES),
+                    sizeof(struct ble_audio_big_subgroup))
+];
+static struct os_mempool btshell_big_sub_pool;
+
+static os_membuf_t btshell_bis_mem[
+    OS_MEMPOOL_SIZE(MYNEWT_VAL(BLE_ISO_MAX_BISES),
+                    sizeof(struct ble_audio_bis))
+];
+static struct os_mempool btshell_bis_pool;
+
+static os_membuf_t btshell_metadata_mem[
+    OS_MEMPOOL_SIZE(MYNEWT_VAL(BLE_ISO_MAX_BISES),
+                    MYNEWT_VAL(BLE_EXT_ADV_MAX_SIZE) - 27)
+];
+static struct os_mempool btshell_metadata_pool;
+
+/**
+ * Mempool size: theoretically it is possible that every BIG Subgroup has
+ * codec specific configuration, every BIS is in separate subgroup and also
+ * has one. This is inefficient but possible and should not cause error if
+ * used that way */
+static os_membuf_t btshell_codec_spec_mem[
+    OS_MEMPOOL_SIZE(MYNEWT_VAL(BLE_ISO_MAX_BISES) * 2, 9)
+];
+static struct os_mempool btshell_codec_spec_pool;
+
+static os_membuf_t btshell_big_params_mem[
+    OS_MEMPOOL_SIZE(MYNEWT_VAL(BLE_ISO_MAX_BIGS), sizeof(struct ble_iso_big_params))
+];
+static struct os_mempool btshell_big_params_pool;
+#endif
 
 #define XSTR(s) STR(s)
 #ifndef STR
@@ -869,6 +929,35 @@ btshell_on_disc_d(uint16_t conn_handle, const struct ble_gatt_error *error,
 
     return 0;
 }
+static int
+btshell_on_read_var(uint16_t conn_handle, const struct ble_gatt_error *error,
+                    struct ble_gatt_attr *attr, uint8_t num_attrs, void *arg)
+{
+    int i;
+
+    switch (error->status) {
+    case 0:
+        console_printf("characteristic read; conn_handle=%d , number of attributes=%d\n", conn_handle, num_attrs);
+
+        for (i = 0; i < num_attrs; i++) {
+            console_printf("\t attr_handle=%d, len=%d value=",
+                            attr[i].handle, OS_MBUF_PKTLEN(attr[i].om));
+            print_mbuf(attr[i].om);
+            console_printf("\n");
+        }
+        break;
+
+    case BLE_HS_EDONE:
+        console_printf("characteristic read complete\n");
+        break;
+
+    default:
+        btshell_print_error(NULL, conn_handle, error);
+        break;
+    }
+
+    return 0;
+}
 
 static int
 btshell_on_read(uint16_t conn_handle, const struct ble_gatt_error *error,
@@ -1228,11 +1317,23 @@ btshell_gap_event(struct ble_gap_event *event, void *arg)
 
         return btshell_restart_adv(event);
 #if MYNEWT_VAL(BLE_EXT_ADV)
-    case BLE_GAP_EVENT_EXT_DISC:
-        btshell_decode_event_type(&event->ext_disc, arg);
+    case BLE_GAP_EVENT_EXT_DISC: {
+        struct btshell_scan_opts *scan_opts = arg;
+
+        if (!scan_opts->silent) {
+            btshell_decode_event_type(&event->ext_disc, arg);
+        }
+
         return 0;
+    }
 #endif
-    case BLE_GAP_EVENT_DISC:
+    case BLE_GAP_EVENT_DISC: {
+        struct btshell_scan_opts *scan_opts = arg;
+
+        if (scan_opts->silent) {
+            return 0;
+        }
+
         console_printf("received advertisement; event_type=%d rssi=%d "
                        "addr_type=%d addr=", event->disc.event_type,
                        event->disc.rssi, event->disc.addr.type);
@@ -1250,6 +1351,7 @@ btshell_gap_event(struct ble_gap_event *event, void *arg)
         btshell_decode_adv_data(event->disc.data, event->disc.length_data, arg);
 
         return 0;
+    }
 
     case BLE_GAP_EVENT_CONN_UPDATE:
         console_printf("connection updated; status=%d ",
@@ -1670,13 +1772,17 @@ btshell_read_by_uuid(uint16_t conn_handle, uint16_t start_handle,
 
 int
 btshell_read_mult(uint16_t conn_handle, uint16_t *attr_handles,
-                   int num_attr_handles)
+                  int num_attr_handles, bool variable)
 {
-    int rc;
+    if (variable) {
+        return ble_gattc_read_mult_var(conn_handle, attr_handles, num_attr_handles,
+                                       btshell_on_read_var, NULL);
+    }
 
-    rc = ble_gattc_read_mult(conn_handle, attr_handles, num_attr_handles,
-                             btshell_on_read, NULL);
-    return rc;
+    return ble_gattc_read_mult(conn_handle, attr_handles,
+                               num_attr_handles,
+                               btshell_on_read, NULL);
+
 }
 
 int
@@ -1727,6 +1833,79 @@ btshell_write_reliable(uint16_t conn_handle,
                                   btshell_on_write_reliable, NULL);
     return rc;
 }
+
+#if MYNEWT_VAL(BLE_GATT_NOTIFY_MULTIPLE)
+int
+btshell_enqueue_notif(uint16_t handle, uint16_t len, uint8_t *value)
+{
+    struct ble_gatt_notif *notify = NULL;
+    struct os_mbuf *val_ptr;
+    int i;
+
+    for (i = 0; i < BTSHELL_MAX_CHRS; i++) {
+        if (pending_notif[i].handle == 0) {
+            notify = &pending_notif[i];
+            break;
+        }
+    }
+
+    if (notify == NULL) {
+        return ENOMEM;
+    }
+
+    notify->handle = handle;
+    if (value != NULL) {
+        notify->value = os_msys_get(0, 0);
+
+        val_ptr = os_mbuf_extend(notify->value, len);
+        if (val_ptr == NULL) {
+            return ENOMEM;
+        }
+        memcpy(val_ptr, value, len);
+    }
+
+    pending_notif_cnt++;
+
+    return 0;
+}
+
+int
+btshell_send_pending_notif(uint16_t conn_handle)
+{
+    int rc = 0;
+    int i;
+
+    if (pending_notif_cnt == 0) {
+        return EALREADY;
+    }
+
+    rc = ble_gatts_notify_multiple_custom(conn_handle, pending_notif_cnt,
+                                          pending_notif);
+    for (i = 0; i < pending_notif_cnt; i++) {
+        pending_notif[i].handle = 0;
+        pending_notif[i].value = NULL;
+    }
+
+    pending_notif_cnt = 0;
+
+    return rc;
+}
+
+int
+btshell_clear_pending_notif(void)
+{
+    int i;
+
+    for (i = 0; i < pending_notif_cnt; i++) {
+        pending_notif[i].handle = 0;
+        pending_notif[i].value = NULL;
+    }
+
+    pending_notif_cnt = 0;
+
+    return 0;
+}
+#endif
 
 #if MYNEWT_VAL(BLE_EXT_ADV)
 int
@@ -2210,8 +2389,8 @@ btshell_l2cap_coc_remove(uint16_t conn_handle, struct ble_l2cap_chan *chan)
 static void
 btshell_l2cap_coc_recv(struct ble_l2cap_chan *chan, struct os_mbuf *sdu)
 {
-    console_printf("LE CoC SDU received, chan: 0x%08lx, data len %d\n",
-                   (uint32_t) chan, OS_MBUF_PKTLEN(sdu));
+    console_printf("LE CoC SDU received, chan: %p, data len %d\n",
+                   chan, OS_MBUF_PKTLEN(sdu));
 
     os_mbuf_free_chain(sdu);
     sdu = os_mbuf_get_pkthdr(&sdu_os_mbuf_pool, 0);
@@ -2229,8 +2408,8 @@ btshell_l2cap_coc_accept(uint16_t conn_handle, uint16_t peer_mtu,
     struct os_mbuf *sdu_rx;
     int rc;
 
-    console_printf("LE CoC accepting, chan: 0x%08lx, peer_mtu %d\n",
-                   (uint32_t) chan, peer_mtu);
+    console_printf("LE CoC accepting, chan: %p, peer_mtu %d\n",
+                   chan, peer_mtu);
 
     for (int i = 0; i < MYNEWT_VAL(BLE_L2CAP_COC_SDU_BUFF_COUNT); i++) {
         sdu_rx = os_mbuf_get_pkthdr(&sdu_os_mbuf_pool, 0);
@@ -2585,6 +2764,276 @@ btshell_get_default_own_addr_type(void)
     return default_own_addr_type;
 }
 
+#if (MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE))
+static int
+btshell_base_find_free(void)
+{
+    int i;
+    for (i = 0; i < MYNEWT_VAL(BLE_ISO_MAX_BIGS); i++) {
+        if (btshell_base_list[i].base == NULL) {
+            return i;
+        }
+    }
+
+    return -ENOMEM;
+}
+
+static struct ble_audio_base *
+btshell_base_find(uint8_t adv_instance)
+{
+    int i;
+    for (i = 0; i < MYNEWT_VAL(BLE_ISO_MAX_BIGS); i++) {
+        if (btshell_base_list[i].adv_instance == adv_instance) {
+            return btshell_base_list[i].base;
+        }
+    }
+
+    return NULL;
+}
+
+static int
+btshell_broadcast_destroy_fn(struct ble_audio_base *base, void *args)
+{
+    struct ble_iso_big_params *big_params =
+        (struct ble_iso_big_params *)args;
+    struct ble_audio_big_subgroup *big_sub;
+    struct ble_audio_bis *bis;
+
+    STAILQ_FOREACH(big_sub, &base->subs, next) {
+        STAILQ_FOREACH(bis, &big_sub->bises, next) {
+            os_memblock_put(&btshell_bis_pool, bis);
+            os_memblock_put(&btshell_codec_spec_pool, bis->codec_spec_config);
+            STAILQ_REMOVE(&big_sub->bises, bis, ble_audio_bis, next);
+        }
+        os_memblock_put(&btshell_big_sub_pool, big_sub);
+        os_memblock_put(&btshell_codec_spec_pool, big_sub->codec_spec_config);
+        os_memblock_put(&btshell_metadata_pool, big_sub->metadata);
+        STAILQ_REMOVE(&base->subs, big_sub, ble_audio_big_subgroup, next);
+    }
+
+    os_memblock_put(&btshell_big_params_pool, big_params);
+
+    return 0;
+}
+
+int
+btshell_broadcast_base_add(uint8_t adv_instance, uint32_t presentation_delay)
+{
+    struct ble_audio_base *base;
+    int free_base_idx;
+
+    base = os_memblock_get(&btshell_base_pool);
+    if (!base) {
+        return ENOMEM;
+    }
+
+    free_base_idx = btshell_base_find_free();
+    if (free_base_idx < 0) {
+        return ENOMEM;
+    }
+
+    base->presentation_delay = presentation_delay;
+
+    btshell_base_list[free_base_idx].base = base;
+    btshell_base_list[free_base_idx].adv_instance = adv_instance;
+
+    return 0;
+}
+
+int
+btshell_broadcast_big_sub_add(uint8_t adv_instance,
+                              uint8_t codec_fmt, uint16_t company_id,
+                              uint16_t vendor_spec,
+                              uint8_t *metadata,
+                              unsigned int metadata_len,
+                              uint8_t *codec_spec_cfg,
+                              unsigned int codec_spec_cfg_len)
+{
+    struct ble_audio_big_subgroup *big_sub;
+    struct ble_audio_base *base;
+    uint8_t *new_metadata = NULL;
+    uint8_t *new_codec_spec_cfg = NULL;
+
+    big_sub = os_memblock_get(&btshell_big_sub_pool);
+    if (!big_sub) {
+        return ENOMEM;
+    }
+
+    base = btshell_base_find(adv_instance);
+    if (!base) {
+        os_memblock_put(&btshell_big_sub_pool, big_sub);
+        return ENOENT;
+    }
+
+    if (metadata_len > 0) {
+        new_metadata = os_memblock_get(&btshell_metadata_pool);
+        if (!new_metadata) {
+            os_memblock_put(&btshell_big_sub_pool, big_sub);
+            return ENOMEM;
+        }
+        memcpy(new_metadata, metadata, metadata_len);
+    }
+
+    if (codec_spec_cfg_len > 0) {
+        new_codec_spec_cfg = os_memblock_get(&btshell_codec_spec_pool);
+        if (!new_codec_spec_cfg) {
+            os_memblock_put(&btshell_big_sub_pool, big_sub);
+            os_memblock_put(&btshell_metadata_pool, new_metadata);
+            return ENOMEM;
+        }
+        memcpy(new_codec_spec_cfg, codec_spec_cfg, codec_spec_cfg_len);
+    }
+
+    big_sub->codec_id.format = codec_fmt;
+    big_sub->codec_id.company_id = company_id;
+    big_sub->codec_id.vendor_specific = vendor_spec;
+    big_sub->codec_id.vendor_specific = vendor_spec;
+    big_sub->codec_spec_config = codec_spec_cfg_len > 0 ?
+                                 new_codec_spec_cfg : NULL;
+    big_sub->codec_spec_config_len = codec_spec_cfg_len;
+    big_sub->metadata = metadata_len > 0 ? new_metadata : NULL;
+    big_sub->metadata_len = metadata_len;
+
+    if (STAILQ_EMPTY(&base->subs)) {
+        STAILQ_INSERT_HEAD(&base->subs, big_sub, next);
+    } else {
+        STAILQ_INSERT_TAIL(&base->subs, big_sub, next);
+    }
+
+    base->num_subgroups++;
+
+    return 0;
+}
+
+int
+btshell_broadcast_bis_add(uint8_t adv_instance,
+                          uint8_t *codec_spec_cfg,
+                          unsigned int codec_spec_cfg_len)
+{
+    struct ble_audio_bis *bis;
+    struct ble_audio_base *base;
+    struct ble_audio_big_subgroup *big_sub;
+    uint8_t *new_codec_spec_cfg;
+
+    base = btshell_base_find(adv_instance);
+    if (!base) {
+        return ENOENT;
+    }
+
+    big_sub = STAILQ_LAST(&base->subs, ble_audio_big_subgroup, next);
+    if (!big_sub) {
+        return ENOENT;
+    }
+
+    bis = os_memblock_get(&btshell_bis_pool);
+    if (!bis) {
+        return ENOMEM;
+    }
+
+    if (codec_spec_cfg_len > 0) {
+        new_codec_spec_cfg = os_memblock_get(&btshell_codec_spec_pool);
+        if (!new_codec_spec_cfg) {
+            os_memblock_put(&btshell_bis_pool, bis);
+            return ENOMEM;
+        }
+        memcpy(new_codec_spec_cfg, codec_spec_cfg, codec_spec_cfg_len);
+    }
+
+    bis->codec_spec_config = codec_spec_cfg_len > 0 ?
+                             new_codec_spec_cfg : NULL;
+    bis->codec_spec_config_len = codec_spec_cfg_len;
+
+    if (STAILQ_EMPTY(&big_sub->bises)) {
+        STAILQ_INSERT_HEAD(&big_sub->bises, bis, next);
+    } else {
+        STAILQ_INSERT_TAIL(&big_sub->bises, bis, next);
+    }
+
+    big_sub->bis_cnt++;
+    return 0;
+}
+
+int
+btshell_broadcast_create(uint8_t adv_instance,
+                         struct ble_gap_ext_adv_params *ext_params,
+                         struct ble_gap_periodic_adv_params *per_params,
+                         const char *name,
+                         struct ble_iso_big_params big_params,
+                         uint8_t *extra_data,
+                         unsigned int extra_data_len)
+{
+    struct ble_audio_base *base;
+    struct ble_broadcast_create_params create_params;
+    struct ble_iso_big_params *big_params_ptr;
+    int rc;
+
+    base = btshell_base_find(adv_instance);
+    if (!base) {
+        return ENOENT;
+    }
+
+    big_params_ptr = os_memblock_get(&btshell_big_params_pool);
+    if (!big_params_ptr) {
+        return ENOMEM;
+    }
+
+    *big_params_ptr = big_params;
+
+    create_params.base = base;
+    create_params.extended_params = ext_params;
+    create_params.periodic_params = per_params;
+    create_params.name = name;
+    create_params.adv_instance = adv_instance;
+    create_params.big_params = big_params_ptr;
+    create_params.svc_data = extra_data;
+    create_params.svc_data_len = extra_data_len;
+
+    rc = ble_audio_broadcast_create(&create_params,
+                                    btshell_broadcast_destroy_fn,
+                                    (void *)big_params_ptr,
+                                    btshell_gap_event);
+    return rc;
+}
+
+int
+btshell_broadcast_destroy(uint8_t adv_instance)
+{
+    return ble_audio_broadcast_destroy(adv_instance);
+}
+
+int
+btshell_broadcast_update(uint8_t adv_instance,
+                         const char *name,
+                         uint8_t *extra_data,
+                         unsigned int extra_data_len)
+{
+    struct ble_audio_base *base;
+    struct ble_broadcast_update_params params;
+
+    base = btshell_base_find(adv_instance);
+
+    params.name = name;
+    params.adv_instance = adv_instance;
+    params.svc_data = extra_data;
+    params.svc_data_len = extra_data_len;
+    params.broadcast_id = base->broadcast_id;
+
+    return ble_audio_broadcast_update(&params);
+}
+
+int
+btshell_broadcast_start(uint8_t adv_instance)
+{
+    return ble_audio_broadcast_start(adv_instance, NULL, NULL);
+}
+
+int
+btshell_broadcast_stop(uint8_t adv_instance)
+{
+    return ble_audio_broadcast_stop(adv_instance);
+}
+#endif
+
 /**
  * main
  *
@@ -2593,14 +3042,10 @@ btshell_get_default_own_addr_type(void)
  *
  * @return int NOTE: this function should never return!
  */
-static int
-main_fn(int argc, char **argv)
+int
+mynewt_main(int argc, char **argv)
 {
     int rc;
-
-#ifdef ARCH_sim
-    mcu_sim_parse_args(argc, argv);
-#endif
 
     /* Initialize OS */
     sysinit();
@@ -2638,7 +3083,43 @@ main_fn(int argc, char **argv)
                          "btshell_coc_conn_pool");
     assert(rc == 0);
 #endif
+#if (MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE))
+    rc = os_mempool_init(&btshell_base_pool, MYNEWT_VAL(BLE_ISO_MAX_BIGS),
+                         sizeof(struct ble_audio_base),
+                         btshell_base_mem,
+                         "btshell_base_pool");
+    assert(rc == 0);
+    rc = os_mempool_init(&btshell_big_params_pool, MYNEWT_VAL(BLE_ISO_MAX_BIGS),
+                         sizeof(struct ble_iso_big_params),
+                         btshell_big_params_mem,
+                         "btshell_big_params_pool");
+    assert(rc == 0);
+    rc = os_mempool_init(&btshell_big_sub_pool, MYNEWT_VAL(BLE_ISO_MAX_BISES),
+                         sizeof(struct ble_audio_big_subgroup),
+                         btshell_big_sub_mem,
+                   "btshell_big_sub_pool");
+    assert(rc == 0);
+    rc = os_mempool_init(&btshell_bis_pool, MYNEWT_VAL(BLE_ISO_MAX_BISES),
+                         sizeof(struct ble_audio_bis), btshell_bis_mem,
+                         "btshell_bis_pool");
+    assert(rc == 0);
 
+    rc = os_mempool_init(&btshell_metadata_pool, MYNEWT_VAL(BLE_ISO_MAX_BISES),
+                         MYNEWT_VAL(BLE_EXT_ADV_MAX_SIZE) - 27,
+                         btshell_metadata_mem, "btshell_metadata_pool");
+    assert(rc == 0);
+
+    rc = os_mempool_init(&btshell_codec_spec_pool,
+                         MYNEWT_VAL(BLE_ISO_MAX_BISES) * 2, 19,
+                         btshell_codec_spec_mem, "btshell_codec_spec_pool");
+    assert(rc == 0);
+
+    rc = os_mempool_init(&btshell_big_params_pool,
+                         MYNEWT_VAL(BLE_ISO_MAX_BIGS),
+                         sizeof(struct ble_iso_big_params),
+                         btshell_big_params_mem, "btshell_big_params_pool");
+    assert(rc == 0);
+#endif
     /* Initialize the NimBLE host configuration. */
     ble_hs_cfg.reset_cb = btshell_on_reset;
     ble_hs_cfg.sync_cb = btshell_on_sync;
@@ -2667,19 +3148,6 @@ main_fn(int argc, char **argv)
     }
     /* os start should never return. If it does, this should be an error */
     assert(0);
-
-    return 0;
-}
-
-int
-main(int argc, char **argv)
-{
-#if BABBLESIM
-    extern void bsim_init(int argc, char** argv, void *main_fn);
-    bsim_init(argc, argv, main_fn);
-#else
-    main_fn(argc, argv);
-#endif
 
     return 0;
 }

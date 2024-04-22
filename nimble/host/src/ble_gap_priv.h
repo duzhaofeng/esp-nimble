@@ -143,6 +143,8 @@ int ble_gap_repeat_pairing_event(const struct ble_gap_repeat_pairing *rp);
 void ble_gap_pairing_complete_event(uint16_t conn_handle, int status);
 void ble_gap_vs_hci_event(const void *buf, uint8_t len);
 int ble_gap_authorize_event(uint16_t conn_handle, uint16_t attr_handle, int is_read);
+void ble_gap_unhandled_hci_event(bool is_le_meta, bool is_vs, const void *buf,
+                                 uint8_t len);
 int ble_gap_master_in_progress(void);
 
 void ble_gap_preempt(void);

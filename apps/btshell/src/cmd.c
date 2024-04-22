@@ -41,7 +41,9 @@
 #include "cmd.h"
 #include "btshell.h"
 #include "cmd_gatt.h"
+#include "cmd_iso.h"
 #include "cmd_l2cap.h"
+#include "cmd_leaudio.h"
 
 #define BTSHELL_MODULE "btshell"
 
@@ -69,7 +71,7 @@ cmd_parse_conn_start_end(uint16_t *out_conn, uint16_t *out_start,
     return 0;
 }
 
-static const struct kv_pair cmd_own_addr_types[] = {
+static const struct parse_arg_kv_pair cmd_own_addr_types[] = {
     { "public",     BLE_OWN_ADDR_PUBLIC },
     { "random",     BLE_OWN_ADDR_RANDOM },
     { "rpa_pub",    BLE_OWN_ADDR_RPA_PUBLIC_DEFAULT },
@@ -77,7 +79,7 @@ static const struct kv_pair cmd_own_addr_types[] = {
     { NULL }
 };
 
-static const struct kv_pair cmd_peer_addr_types[] = {
+static const struct parse_arg_kv_pair cmd_peer_addr_types[] = {
     { "public",     BLE_ADDR_PUBLIC },
     { "random",     BLE_ADDR_RANDOM },
     { "public_id",  BLE_ADDR_PUBLIC_ID },
@@ -85,7 +87,7 @@ static const struct kv_pair cmd_peer_addr_types[] = {
     { NULL }
 };
 
-static const struct kv_pair cmd_addr_type[] = {
+static const struct parse_arg_kv_pair cmd_addr_type[] = {
     { "public",     BLE_ADDR_PUBLIC },
     { "random",     BLE_ADDR_RANDOM },
     { NULL }
@@ -93,7 +95,7 @@ static const struct kv_pair cmd_addr_type[] = {
 
 
 static int
-parse_dev_addr(const char *prefix, const struct kv_pair *addr_types,
+parse_dev_addr(const char *prefix, const struct parse_arg_kv_pair *addr_types,
                ble_addr_t *addr)
 {
     char name[32];
@@ -115,7 +117,7 @@ parse_dev_addr(const char *prefix, const struct kv_pair *addr_types,
     }
     written += rc;
 
-    rc = parse_arg_addr(name, addr);
+    rc = parse_arg_ble_addr(name, addr);
     if (rc == ENOENT) {
         /* not found */
         return rc;
@@ -153,7 +155,7 @@ parse_dev_addr(const char *prefix, const struct kv_pair *addr_types,
 /*****************************************************************************
  * $advertise                                                                *
  *****************************************************************************/
-static const struct kv_pair cmd_adv_filt_types[] = {
+static const struct parse_arg_kv_pair cmd_adv_filt_types[] = {
     { "none", BLE_HCI_ADV_FILT_NONE },
     { "scan", BLE_HCI_ADV_FILT_SCAN },
     { "conn", BLE_HCI_ADV_FILT_CONN },
@@ -162,7 +164,7 @@ static const struct kv_pair cmd_adv_filt_types[] = {
 };
 
 #if MYNEWT_VAL(BLE_EXT_ADV)
-static struct kv_pair cmd_ext_adv_phy_opts[] = {
+static struct parse_arg_kv_pair cmd_ext_adv_phy_opts[] = {
     { "1M",          0x01 },
     { "2M",          0x02 },
     { "coded",       0x03 },
@@ -177,7 +179,7 @@ cmd_advertise_configure(int argc, char **argv)
     uint8_t instance;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -338,7 +340,7 @@ cmd_advertise_set_addr(int argc, char **argv)
     uint8_t instance;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -349,7 +351,7 @@ cmd_advertise_set_addr(int argc, char **argv)
         return rc;
     }
 
-    rc = parse_arg_mac("addr", addr.val);
+    rc = parse_arg_mac_addr("addr", addr.val);
     if (rc != 0) {
         console_printf("invalid 'addr' parameter\n");
                     return rc;
@@ -375,7 +377,7 @@ cmd_advertise_start(int argc, char **argv)
     bool restart;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -419,7 +421,7 @@ cmd_advertise_stop(int argc, char **argv)
     uint8_t instance;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -445,7 +447,7 @@ cmd_advertise_remove(int argc, char **argv)
     uint8_t instance;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -546,14 +548,14 @@ static const struct shell_cmd_help advertise_remove_help = {
 #endif
 
 #else
-static const struct kv_pair cmd_adv_conn_modes[] = {
+static const struct parse_arg_kv_pair cmd_adv_conn_modes[] = {
     { "non", BLE_GAP_CONN_MODE_NON },
     { "und", BLE_GAP_CONN_MODE_UND },
     { "dir", BLE_GAP_CONN_MODE_DIR },
     { NULL }
 };
 
-static const struct kv_pair cmd_adv_disc_modes[] = {
+static const struct parse_arg_kv_pair cmd_adv_disc_modes[] = {
     { "non", BLE_GAP_DISC_MODE_NON },
     { "ltd", BLE_GAP_DISC_MODE_LTD },
     { "gen", BLE_GAP_DISC_MODE_GEN },
@@ -571,7 +573,7 @@ cmd_advertise(int argc, char **argv)
     bool restart;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -699,7 +701,7 @@ static const struct shell_cmd_help advertise_help = {
  * $connect                                                                  *
  *****************************************************************************/
 
-static struct kv_pair cmd_ext_conn_phy_opts[] = {
+static struct parse_arg_kv_pair cmd_ext_conn_phy_opts[] = {
     { "none",        0x00 },
     { "1M",          0x01 },
     { "coded",       0x02 },
@@ -721,7 +723,7 @@ cmd_connect(int argc, char **argv)
     int own_addr_type;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -1014,7 +1016,7 @@ cmd_disconnect(int argc, char **argv)
     uint8_t reason;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -1105,10 +1107,11 @@ static const struct shell_cmd_help disconnect_help = {
  *****************************************************************************/
 
 static struct btshell_scan_opts g_scan_opts = {
-        .limit = UINT16_MAX,
-        .ignore_legacy = 0,
-        .periodic_only = 0,
-        .name_filter_len = 0,
+    .limit = UINT16_MAX,
+    .ignore_legacy = 0,
+    .periodic_only = 0,
+    .silent = 0,
+    .name_filter_len = 0,
 };
 
 static int
@@ -1117,7 +1120,7 @@ cmd_set_scan_opts(int argc, char **argv)
     char *name_filter;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -1131,6 +1134,12 @@ cmd_set_scan_opts(int argc, char **argv)
     g_scan_opts.ignore_legacy = parse_arg_bool_dflt("ignore_legacy", 0, &rc);
     if (rc != 0) {
         console_printf("invalid 'ignore_legacy' parameter\n");
+        return rc;
+    }
+
+    g_scan_opts.silent = parse_arg_bool_dflt("silent", 0, &rc);
+    if (rc != 0) {
+        console_printf("invalid 'silent' parameter\n");
         return rc;
     }
 
@@ -1158,6 +1167,7 @@ static const struct shell_param set_scan_opts_params[] = {
     {"decode_limit", "usage: =[0-UINT16_MAX], default: UINT16_MAX"},
     {"ignore_legacy", "usage: =[0-1], default: 0"},
     {"periodic_only", "usage: =[0-1], default: 0"},
+    {"silent", "usage: =[0-1], default: 0"},
     {"name_filter", "usage: =name, default: {none}"},
     {NULL, NULL}
 };
@@ -1173,7 +1183,7 @@ static const struct shell_cmd_help set_scan_opts_help = {
  * $scan                                                                     *
  *****************************************************************************/
 
-static const struct kv_pair cmd_scan_filt_policies[] = {
+static const struct parse_arg_kv_pair cmd_scan_filt_policies[] = {
     { "no_wl", BLE_HCI_SCAN_FILT_NO_WL },
     { "use_wl", BLE_HCI_SCAN_FILT_USE_WL },
     { "no_wl_inita", BLE_HCI_SCAN_FILT_NO_WL_INITA },
@@ -1181,7 +1191,7 @@ static const struct kv_pair cmd_scan_filt_policies[] = {
     { NULL }
 };
 
-static struct kv_pair cmd_scan_ext_types[] = {
+static struct parse_arg_kv_pair cmd_scan_ext_types[] = {
     { "none",       0x00 },
     { "1M",         0x01 },
     { "coded",      0x02 },
@@ -1204,7 +1214,7 @@ cmd_scan(int argc, char **argv)
     uint16_t period;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -1428,7 +1438,7 @@ cmd_set(int argc, char **argv)
     int good = 0;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -1544,11 +1554,11 @@ cmd_set_adv_data_or_scan_rsp(int argc, char **argv, bool scan_rsp,
     int8_t eddystone_measured_power = 0;
     char eddystone_url_body[BLE_EDDYSTONE_URL_MAX_LEN];
     char *eddystone_url_full;
-    int svc_data_uuid16_len;
-    int svc_data_uuid32_len;
-    int svc_data_uuid128_len;
-    int uri_len;
-    int mfg_data_len;
+    unsigned int svc_data_uuid16_len;
+    unsigned int svc_data_uuid32_len;
+    unsigned int svc_data_uuid128_len;
+    unsigned int uri_len;
+    unsigned int mfg_data_len;
     int tmp;
     int rc;
 #if MYNEWT_VAL(BLE_EXT_ADV)
@@ -1566,7 +1576,7 @@ cmd_set_adv_data_or_scan_rsp(int argc, char **argv, bool scan_rsp,
 
     memset(&adv_fields, 0, sizeof adv_fields);
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -1753,9 +1763,9 @@ cmd_set_adv_data_or_scan_rsp(int argc, char **argv, bool scan_rsp,
         return rc;
     }
 
-    rc = parse_arg_byte_stream("service_data_uuid128",
+    rc = parse_arg_byte_stream_custom("service_data_uuid128", ":-",
                                CMD_ADV_DATA_SVC_DATA_UUID128_MAX_LEN,
-                               svc_data_uuid128, &svc_data_uuid128_len);
+                               svc_data_uuid128, 0, &svc_data_uuid128_len);
     if (rc == 0) {
         adv_fields.svc_data_uuid128 = svc_data_uuid128;
         adv_fields.svc_data_uuid128_len = svc_data_uuid128_len;
@@ -1845,7 +1855,7 @@ cmd_set_adv_data_or_scan_rsp(int argc, char **argv, bool scan_rsp,
             rc = ble_gap_ext_adv_rsp_set_data(instance, adv_data);
 #if MYNEWT_VAL(BLE_PERIODIC_ADV)
         } else if (periodic) {
-            rc = ble_gap_periodic_adv_set_data(instance, adv_data);
+            rc = ble_gap_periodic_adv_set_data(instance, adv_data, NULL);
 #endif
         } else {
             rc = ble_gap_ext_adv_set_data(instance, adv_data);
@@ -1932,7 +1942,7 @@ cmd_set_priv_mode(int argc, char **argv)
     uint8_t priv_mode;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -1980,7 +1990,7 @@ cmd_white_list(int argc, char **argv)
     int addrs_cnt;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2036,7 +2046,7 @@ cmd_conn_rssi(int argc, char **argv)
     int8_t rssi;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2082,7 +2092,7 @@ cmd_conn_update_params(int argc, char **argv)
     uint16_t conn_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2176,7 +2186,7 @@ cmd_conn_datalen(int argc, char **argv)
     uint16_t tx_time;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2229,7 +2239,7 @@ static const struct shell_cmd_help conn_datalen_help = {
  * keystore                                                                  *
  *****************************************************************************/
 
-static const struct kv_pair cmd_keystore_entry_type[] = {
+static const struct parse_arg_kv_pair cmd_keystore_entry_type[] = {
     { "msec",       BLE_STORE_OBJ_TYPE_PEER_SEC },
     { "ssec",       BLE_STORE_OBJ_TYPE_OUR_SEC },
     { "cccd",       BLE_STORE_OBJ_TYPE_CCCD },
@@ -2327,7 +2337,7 @@ cmd_keystore_add(int argc, char **argv)
     int obj_type;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2391,7 +2401,7 @@ cmd_keystore_del(int argc, char **argv)
     int obj_type;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2437,7 +2447,7 @@ cmd_keystore_iterator(int obj_type,
             console_printf("Key: ");
             if (ble_addr_cmp(&val->sec.peer_addr, BLE_ADDR_ANY) == 0) {
                 console_printf("ediv=%u ", val->sec.ediv);
-                console_printf("ediv=%llu ", val->sec.rand_num);
+                console_printf("rand=%" PRIu64, val->sec.rand_num);
             } else {
                 console_printf("addr_type=%u ", val->sec.peer_addr.type);
                 print_addr(val->sec.peer_addr.val);
@@ -2480,7 +2490,7 @@ cmd_keystore_show(int argc, char **argv)
     int type;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2546,7 +2556,7 @@ cmd_auth_passkey(int argc, char **argv)
     char *yesno;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2666,7 +2676,7 @@ cmd_security_pair(int argc, char **argv)
     uint16_t conn_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2710,7 +2720,7 @@ cmd_security_unpair(int argc, char **argv)
     int rc;
     int oldest;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2767,7 +2777,7 @@ cmd_security_start(int argc, char **argv)
     uint16_t conn_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2815,7 +2825,7 @@ cmd_security_encryption(int argc, char **argv)
     int rc;
     int auth;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -2896,7 +2906,7 @@ cmd_security_set_data(int argc, char **argv)
 
     good = 0;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3010,7 +3020,7 @@ cmd_test_tx(int argc, char **argv)
     uint16_t num;
     uint8_t stop;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3087,7 +3097,7 @@ cmd_phy_set(int argc, char **argv)
     uint16_t phy_opts;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3147,7 +3157,7 @@ cmd_phy_set_default(int argc, char **argv)
     uint8_t rx_phys_mask;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3193,7 +3203,7 @@ cmd_phy_read(int argc, char **argv)
     uint8_t rx_phy;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3404,6 +3414,7 @@ static const struct shell_param gatt_read_params[] = {
     {"uuid", "read by uuid, usage: =[UUID]"},
     {"start", "start handle, usage: =<UINT16>"},
     {"end", "end handle, usage: =<UINT16>"},
+    {"variable", "used in case of multi read, usage: =[0-1], default=0"},
     {NULL, NULL}
 };
 
@@ -3495,6 +3506,43 @@ static const struct shell_cmd_help gatt_write_help = {
     .summary = "perform gatt write procedure",
     .usage = NULL,
     .params = gatt_write_params,
+};
+
+/*****************************************************************************
+ * $gatt-enqueue-notify                                                      *
+ *****************************************************************************/
+
+static const struct shell_param gatt_enqueue_notif_params[] = {
+    {"handle", "characteristic handle, usage: =<UINT16>"},
+    {"value", "usage: =<octets>"},
+    {NULL, NULL}
+};
+
+static const struct shell_cmd_help gatt_enqueue_notif_help = {
+    .summary = "enqueue notification to be sent",
+    .usage = NULL,
+    .params = gatt_enqueue_notif_params,
+};
+
+/*****************************************************************************
+ * $gatt-send-pending-notify                                                 *
+ *****************************************************************************/
+
+static const struct shell_param gatt_send_pending_notif_params[] = {
+    {"conn", "connection handle, usage: =<UINT16>"},
+    {NULL, NULL}
+};
+
+static const struct shell_cmd_help gatt_send_pending_notif_help = {
+    .summary = "send pending notifications",
+    .usage = NULL,
+    .params = gatt_send_pending_notif_params,
+};
+
+static const struct shell_cmd_help gatt_clear_pending_notif_help = {
+    .summary = "clear pending notifications",
+    .usage = NULL,
+    .params = NULL,
 };
 #endif
 
@@ -3633,7 +3681,7 @@ cmd_periodic_configure(int argc, char **argv)
     uint8_t instance;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3689,7 +3737,7 @@ cmd_periodic_start(int argc, char **argv)
     uint8_t instance;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3700,7 +3748,7 @@ cmd_periodic_start(int argc, char **argv)
         return rc;
     }
 
-    rc = ble_gap_periodic_adv_start(instance);
+    rc = ble_gap_periodic_adv_start(instance, NULL);
     if (rc) {
         console_printf("failed to start periodic advertising\n");
         return rc;
@@ -3715,7 +3763,7 @@ cmd_periodic_stop(int argc, char **argv)
     uint8_t instance;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3782,7 +3830,7 @@ cmd_sync_create(int argc, char **argv)
     uint8_t sid;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3867,7 +3915,7 @@ cmd_sync_transfer(int argc, char **argv)
     uint16_t sync_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3906,7 +3954,7 @@ cmd_sync_reporting(int argc, char **argv)
     bool enable;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -3923,7 +3971,7 @@ cmd_sync_reporting(int argc, char **argv)
         return rc;
     }
 
-    rc = ble_gap_periodic_adv_sync_reporting(sync_handle, enable);
+    rc = ble_gap_periodic_adv_sync_reporting(sync_handle, enable, NULL);
     if (rc) {
         console_printf("Failed to %s reporting (%d)\n",
                        enable ? "enable" : "disable", rc);
@@ -3967,7 +4015,7 @@ cmd_sync_transfer_set_info(int argc, char **argv)
     uint8_t instance;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -4022,7 +4070,7 @@ cmd_sync_transfer_receive(int argc, char **argv)
     bool disable;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -4099,7 +4147,7 @@ cmd_sync_terminate(int argc, char **argv)
     uint16_t sync_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -4137,7 +4185,7 @@ cmd_sync_stats(int argc, char **argv)
     uint16_t sync_handle;
     int rc;
 
-    rc = parse_arg_all(argc - 1, argv + 1);
+    rc = parse_arg_init(argc - 1, argv + 1);
     if (rc != 0) {
         return rc;
     }
@@ -4163,6 +4211,140 @@ static const struct shell_cmd_help sync_stats_help = {
     .summary = "show sync stats",
     .usage = NULL,
     .params = sync_stats_params,
+};
+#endif
+#endif
+
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE)
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+static const struct shell_param leaudio_base_add_params[] = {
+    {"adv_instance", "Advertising instance, usage: =<UINT8>"},
+    { "presentation_delay", "usage: =<UINT32>"  },
+
+    { NULL, NULL}
+};
+
+static const struct shell_cmd_help leaudio_base_add_help = {
+    .summary = "Add BASE configuration for broadcast",
+    .usage = NULL,
+    .params = leaudio_base_add_params,
+};
+
+static const struct shell_param leaudio_big_sub_add_params[] = {
+    {"adv_instance", "Advertising instance, usage: =<UINT8>"},
+    { "codec_fmt", "usage: <UINT8>"  },
+    { "company_id", "usage: =<UINT16>"  },
+    { "vendor_spec", "usage: =<UINT16>"  },
+    { "codec_spec_config", "usage: =[XX:XX...]"  },
+    { "metadata", "usage: =[XX:XX...]"  },
+
+    { NULL, NULL}
+};
+
+static const struct shell_cmd_help leaudio_big_sub_add_help = {
+    .summary = "Add BIG subgroup configuration for broadcast",
+    .usage = NULL,
+    .params = leaudio_big_sub_add_params,
+};
+
+static const struct shell_param leaudio_bis_add_params[] = {
+    {"adv_instance", "Advertising instance, usage: =<UINT8>"},
+    { "codec_spec_config", "usage: =[XX:XX...]"  },
+
+    { NULL, NULL}
+};
+
+static const struct shell_cmd_help leaudio_bis_add_help = {
+    .summary = "Add BIS configuration for broadcast announcements to last "
+               "added BIG subgroup",
+    .usage = NULL,
+    .params = leaudio_bis_add_params,
+};
+
+static const struct shell_param leaudio_broadcast_create_params[] = {
+    {"adv_instance", "Advertising instance, usage: =<UINT8>"},
+    {"ext_interval_min", "usage: =[0-UINT16_MAX], default: 0"},
+    {"ext_interval_max", "usage: =[0-UINT16_MAX], default: 0"},
+    {"per_interval_min", "usage: =[0-UINT16_MAX], default: 0"},
+    {"per_interval_max", "usage: =[0-UINT16_MAX], default: 0"},
+
+    {"name", "usage: =[string]"},
+
+    {"sdu_interval", "SDU interval, in us, usage: =<UINT32>"},
+    {"max_sdu", "max SDU size, in octets, usage: =<UINT16>"},
+    {"max_latency", "max transport latency, in ms, usage: =<UINT16>"},
+    {"rtn", "RTN, usage: =<UINT8>"},
+    {"phy", "PHY, usage: =<UINT8>"},
+    {"packing", "packing, optional, true if not given, usage: =<UINT8>"},
+    {"framing", "framing, optional, false if not given, usage: =<UINT8>"},
+    {"encryption", "optional, encryption, usage: =<UINT8>"},
+    {"broadcast_code", "optional, obligatory if encryption is enabled, "
+     "usage: =<XX:XX:...>, len=16 octets"},
+    {"extra_data", "usage: =[XX:XX...]"},
+
+    { NULL, NULL}
+};
+
+static const struct shell_cmd_help leaudio_broadcast_create_help = {
+    .summary = "Add BIS configuration for broadcast to last added BIG "
+               "subgroup",
+    .usage = NULL,
+    .params = leaudio_broadcast_create_params,
+};
+
+static const struct shell_param leaudio_broadcast_destroy_params[] = {
+    {"adv_instance", "Advertising instance, usage: =<UINT8>"},
+
+    { NULL, NULL}
+};
+
+static const struct shell_cmd_help leaudio_broadcast_destroy_help = {
+    .summary = "Destroy BASE",
+    .usage = NULL,
+
+    .params = leaudio_broadcast_destroy_params,
+};
+
+static const struct shell_param leaudio_broadcast_update_params[] = {
+    {"adv_instance", "Advertising instance, usage: =<UINT8>"},
+    {"name", "usage: =[string]"},
+    {"extra_data_len", "usage: =<UINT8>"},
+    {"extra_data", "usage: =[XX:XX...]"},
+
+    { NULL, NULL}
+};
+
+static const struct shell_cmd_help leaudio_broadcast_update_help = {
+    .summary = "Update broadcast",
+    .usage = NULL,
+
+    .params = leaudio_broadcast_update_params,
+};
+
+static const struct shell_param leaudio_broadcast_start_params[] = {
+    {"adv_instance", "Advertising instance, usage: =<UINT8>"},
+
+    { NULL, NULL}
+};
+
+static const struct shell_cmd_help leaudio_broadcast_start_help = {
+    .summary = "Start broadcast",
+    .usage = NULL,
+
+    .params = leaudio_broadcast_start_params,
+};
+
+static const struct shell_param leaudio_broadcast_stop_params[] = {
+    {"adv_instance", "Advertising instance, usage: =<UINT8>"},
+
+    { NULL, NULL}
+};
+
+static const struct shell_cmd_help leaudio_broadcast_stop_help = {
+    .summary = "Stop broadcast",
+    .usage = NULL,
+
+    .params = leaudio_broadcast_stop_params,
 };
 #endif
 #endif
@@ -4418,6 +4600,27 @@ static const struct shell_cmd btshell_commands[] = {
         .help = &gatt_write_help,
 #endif
     },
+    {
+        .sc_cmd = "gatt-enqueue-notif",
+        .sc_cmd_func = cmd_gatt_enqueue_notif,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &gatt_enqueue_notif_help,
+#endif
+    },
+    {
+        .sc_cmd = "gatt-send-queued-notif",
+        .sc_cmd_func = cmd_gatt_send_pending_notif,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &gatt_send_pending_notif_help,
+#endif
+    },
+    {
+        .sc_cmd = "gatt-clear-queued-notif",
+        .sc_cmd_func = cmd_gatt_clear_pending_notif,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &gatt_clear_pending_notif_help,
+#endif
+    },
 #if MYNEWT_VAL(BLE_L2CAP_COC_MAX_NUM)
     {
         .sc_cmd = "l2cap-update",
@@ -4664,6 +4867,112 @@ static const struct shell_cmd btshell_commands[] = {
     },
 #endif
 #endif
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE)
+    {
+        .sc_cmd = "base_add",
+        .sc_cmd_func = cmd_leaudio_base_add,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &leaudio_base_add_help,
+#endif
+    },
+    {
+        .sc_cmd = "big_sub_add",
+        .sc_cmd_func = cmd_leaudio_big_sub_add,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &leaudio_big_sub_add_help,
+#endif
+    },
+    {
+        .sc_cmd = "bis_add",
+        .sc_cmd_func = cmd_leaudio_bis_add,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &leaudio_bis_add_help,
+#endif
+    },
+    {
+        .sc_cmd = "broadcast_create",
+        .sc_cmd_func = cmd_leaudio_broadcast_create,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &leaudio_broadcast_create_help,
+#endif
+    },
+    {
+        .sc_cmd = "broadcast_destroy",
+        .sc_cmd_func = cmd_leaudio_broadcast_destroy,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &leaudio_broadcast_destroy_help,
+#endif
+    },
+    {
+        .sc_cmd = "broadcast_update",
+        .sc_cmd_func = cmd_leaudio_broadcast_update,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &leaudio_broadcast_update_help,
+#endif
+    },
+    {
+        .sc_cmd = "broadcast_start",
+        .sc_cmd_func = cmd_leaudio_broadcast_start,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &leaudio_broadcast_start_help,
+#endif
+    },
+    {
+        .sc_cmd = "broadcast_stop",
+        .sc_cmd_func = cmd_leaudio_broadcast_stop,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &leaudio_broadcast_stop_help,
+#endif
+    },
+#endif /* BLE_ISO_BROADCAST_SOURCE */
+#if MYNEWT_VAL(BLE_ISO)
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SOURCE)
+    {
+        .sc_cmd = "big-create",
+        .sc_cmd_func = cmd_iso_big_create,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &cmd_iso_big_create_help,
+#endif
+    },
+    {
+        .sc_cmd = "big-terminate",
+        .sc_cmd_func = cmd_iso_big_terminate,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &cmd_iso_big_terminate_help,
+#endif
+    },
+#endif /* BLE_ISO_BROADCAST_SOURCE */
+#if MYNEWT_VAL(BLE_ISO_BROADCAST_SINK)
+    {
+        .sc_cmd = "big-sync-create",
+        .sc_cmd_func = cmd_iso_big_sync_create,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &cmd_iso_big_sync_create_help,
+#endif
+    },
+    {
+        .sc_cmd = "big-sync-terminate",
+        .sc_cmd_func = cmd_iso_big_sync_terminate,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &cmd_iso_big_sync_terminate_help,
+#endif
+    },
+#endif /* BLE_ISO_BROADCAST_SINK */
+    {
+        .sc_cmd = "iso-data-path-setup",
+        .sc_cmd_func = cmd_iso_data_path_setup,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &cmd_iso_data_path_setup_help,
+#endif
+    },
+    {
+        .sc_cmd = "iso-data-path-remove",
+        .sc_cmd_func = cmd_iso_data_path_remove,
+#if MYNEWT_VAL(SHELL_CMD_HELP)
+        .help = &cmd_iso_data_path_remove_help,
+#endif
+    },
+#endif /* BLE_ISO */
     { 0 },
 };
 

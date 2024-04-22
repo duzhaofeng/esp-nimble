@@ -168,7 +168,7 @@ int ble_ll_adv_can_chg_whitelist(void);
  * Called when an advertising event has been removed from the scheduler
  * without being run.
  */
-void ble_ll_adv_event_rmvd_from_sched(struct ble_ll_adv_sm *advsm);
+void ble_ll_adv_preempted(struct ble_ll_adv_sm *advsm);
 
 /*
  * Called when a periodic event has been removed from the scheduler
@@ -201,6 +201,9 @@ int ble_ll_adv_periodic_set_info_transfer(const uint8_t *cmdbuf, uint8_t len,
 
 /* Get advertising instance with periodic advertising configured */
 struct ble_ll_adv_sm *ble_ll_adv_sync_get(uint8_t handle);
+/* Get periodic advertising event scheduled time */
+int ble_ll_adv_sync_sched_get(struct ble_ll_adv_sm *advsm,
+                              uint32_t *start_time, uint32_t *end_time);
 
 #if MYNEWT_VAL(BLE_LL_ISO_BROADCASTER)
 struct ble_ll_iso_big;

@@ -64,6 +64,10 @@ static const uint8_t octet_15 = OCTET(
 #endif
 );
 
+static const uint8_t octet_22 = OCTET(
+    BIT(2) /* HCI Set Event Mask Page 2 */
+);
+
 static const uint8_t octet_25 = OCTET(
     BIT(0) /* HCI LE Set Event Mask */
     BIT(1) /* HCI LE Read Buffer Size [v1] */
@@ -161,7 +165,7 @@ static const uint8_t octet_35 = OCTET(
     BIT(2) /* HCI LE Set Resolvable Private Address Timeout */
 #endif
     BIT(3) /* HCI LE Read Maximum Data Length */
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
 #if MYNEWT_VAL(BLE_LL_ROLE_PERIPHERAL) || MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
     BIT(4) /* HCI LE Read PHY */
     BIT(5) /* HCI LE Set Default PHY */
@@ -307,7 +311,7 @@ static const uint8_t g_ble_ll_hci_supp_cmds[64] = {
     0,
     0,
     0,
-    0,
+    octet_22,
     0,
     0,
     octet_25,

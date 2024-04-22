@@ -23,6 +23,8 @@
 uint global_device_nbr;
 struct nrf52_bsim_args_t *args;
 
+extern int mynewt_main(int argc, char **argv);
+
 void
 bst_tick(bs_time_t time)
 {
@@ -46,8 +48,8 @@ main_clean_up_trace_wrap(void)
     return inner_main_clean_up(0);
 }
 
-void
-bsim_init(int argc, char** argv, int (*main_fn)(int argc, char **arg))
+int
+main(int argc, char** argv)
 {
         setvbuf(stdout, NULL, _IOLBF, 512);
         setvbuf(stderr, NULL, _IOLBF, 512);
@@ -64,7 +66,7 @@ bsim_init(int argc, char** argv, int (*main_fn)(int argc, char **arg))
         bs_read_function_names_from_Tsymbols(argv[0]);
 
         nrf_hw_initialize(&args->nrf_hw);
-        os_init(main_fn);
+        os_init(mynewt_main);
         os_start();
 
         while (1) {

@@ -44,6 +44,9 @@
 #if !CONFIG_BT_CONTROLLER_ENABLED
 #include "nimble/transport.h"
 #endif
+#if NIMBLE_CFG_CONTROLLER
+#include "controller/ble_ll.h"
+#endif
 
 #define NIMBLE_PORT_LOG_TAG          "BLE_INIT"
 

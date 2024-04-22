@@ -183,7 +183,7 @@ static const uint8_t g_ble_phy_chan_freq[BLE_PHY_NUM_CHANS] = {
     66, 68, 70, 72, 74, 76, 78,  2, 26, 80, /* 30-39 */
 };
 
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
 /* packet start offsets (in usecs) */
 static const uint16_t g_ble_phy_mode_pkt_start_off[BLE_PHY_NUM_MODE] = {
     [BLE_PHY_MODE_1M] = 40,
@@ -338,7 +338,7 @@ struct nrf_ccm_data
 struct nrf_ccm_data g_nrf_ccm_data;
 #endif
 
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
 
 /* Packet start offset (in usecs). This is the preamble plus access address.
  * For LE Coded PHY this also includes CI and TERM1. */
@@ -451,7 +451,7 @@ ble_phy_mode_pdu_start_off(int phy_mode)
 static int
 ble_phy_get_cur_phy(void)
 {
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
     switch (g_ble_phy_data.phy_cur_phy_mode) {
         case BLE_PHY_MODE_1M:
             return BLE_PHY_1M;
@@ -852,6 +852,8 @@ ble_phy_wfr_enable(int txrx, uint8_t tx_phy_mode, uint32_t wfr_usecs)
          * by waiting 1 usec more.
          */
         end_time += 1;
+
+        end_time += MYNEWT_VAL(BLE_PHY_EXTENDED_TIFS);
     } else {
         /*
          * RX shall start no later than wfr_usecs after RX enabled.
@@ -902,7 +904,7 @@ ble_phy_wfr_enable(int txrx, uint8_t tx_phy_mode, uint32_t wfr_usecs)
 static uint32_t
 ble_phy_get_ccm_datarate(void)
 {
-#if BLE_LL_BT5_PHY_SUPPORTED
+#if MYNEWT_VAL(BLE_LL_PHY)
     switch (g_ble_phy_data.phy_cur_phy_mode) {
     case BLE_PHY_MODE_1M:
         return CCM_MODE_DATARATE_1Mbit << CCM_MODE_DATARATE_Pos;
@@ -979,7 +981,7 @@ ble_phy_rx_xcvr_setup(void)
     g_ble_phy_data.phy_rx_started = 0;
     g_ble_phy_data.phy_state = BLE_PHY_STATE_RX;
 
-#if BLE_LL_BT5_PHY_SUPPORTED
+#if MYNEWT_VAL(BLE_LL_PHY)
     /*
      * On Coded PHY there are CI and TERM1 fields before PDU starts so we need
      * to take this into account when setting up BCC.
@@ -1065,7 +1067,7 @@ ble_phy_tx_end_isr(void)
     }
 
     if (transition == BLE_PHY_TRANSITION_TX_RX) {
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
         ble_phy_mode_apply(g_ble_phy_data.phy_rx_phy_mode);
 #endif
 
@@ -1242,7 +1244,7 @@ ble_phy_rx_end_isr(void)
 #endif
     }
 
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
     ble_phy_mode_apply(g_ble_phy_data.phy_tx_phy_mode);
 #endif
 
@@ -1525,7 +1527,7 @@ ble_phy_isr(void)
     os_trace_isr_exit();
 }
 
-#if PHY_USE_HEADERMASK_WORKAROUND
+#if PHY_USE_HEADERMASK_WORKAROUND && MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
 static void
 ble_phy_ccm_isr(void)
 {
@@ -1810,7 +1812,7 @@ ble_phy_tx_set_start_time(uint32_t cputime, uint8_t rem_usecs)
 
     ble_phy_trace_u32x2(BLE_PHY_TRACE_ID_START_TX, cputime, rem_usecs);
 
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
     ble_phy_mode_apply(g_ble_phy_data.phy_tx_phy_mode);
 #endif
 
@@ -1852,7 +1854,7 @@ ble_phy_rx_set_start_time(uint32_t cputime, uint8_t rem_usecs)
 
     ble_phy_trace_u32x2(BLE_PHY_TRACE_ID_START_RX, cputime, rem_usecs);
 
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+#if MYNEWT_VAL(BLE_LL_PHY)
     ble_phy_mode_apply(g_ble_phy_data.phy_rx_phy_mode);
 #endif
 
@@ -2286,6 +2288,22 @@ void ble_phy_disable_dtm(void)
     /* Enable whitening */
     NRF_RADIO->PCNF1 |= RADIO_PCNF1_WHITEEN_Msk;
 }
+
+#if MYNEWT_VAL(BLE_LL_DTM_EXTENSIONS)
+int
+ble_phy_dtm_carrier(uint8_t rf_channel)
+{
+    /* based on Nordic DTM sample */
+    ble_phy_disable();
+    ble_phy_enable_dtm();
+    ble_phy_mode_apply(BLE_PHY_MODE_1M);
+    nrf_radio_shorts_enable(NRF_RADIO, NRF_RADIO_SHORT_READY_START_MASK);
+    NRF_RADIO->FREQUENCY = g_ble_phy_chan_freq[rf_channel];
+    nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_TXEN);
+
+    return 0;
+}
+#endif
 #endif
 
 void

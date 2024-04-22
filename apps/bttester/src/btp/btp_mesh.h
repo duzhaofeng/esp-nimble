@@ -47,7 +47,8 @@ struct btp_mesh_read_supported_commands_rp {
 #define BTP_MESH_CONFIG_PROVISIONING    0x02
 struct btp_mesh_config_provisioning_cmd {
     uint8_t uuid[16];
-    uint8_t static_auth[16];
+    uint8_t static_auth[32];
+    uint8_t static_auth_length;
     uint8_t out_size;
     uint16_t out_actions;
     uint8_t in_size;
@@ -66,6 +67,10 @@ struct btp_mesh_provision_node_cmd {
 } __packed;
 
 #define BTP_MESH_INIT            0x04
+struct btp_mesh_init_cmd {
+    uint8_t comp;
+} __packed;
+
 #define BTP_MESH_RESET            0x05
 #define BTP_MESH_INPUT_NUMBER        0x06
 struct btp_mesh_input_number_cmd {
@@ -114,6 +119,7 @@ struct btp_mesh_lpn_set_cmd {
 
 #define BTP_MESH_MODEL_SEND            0x0f
 struct btp_mesh_model_send_cmd {
+    uint8_t ttl;
     uint16_t src;
     uint16_t dst;
     uint8_t payload_len;
@@ -132,6 +138,7 @@ struct btp_mesh_lpn_unsubscribe_cmd {
 
 #define BTP_MESH_RPL_CLEAR            0x12
 #define BTP_MESH_PROXY_IDENTITY        0x13
+#define BTP_MESH_START                  0x78
 
 /* events */
 #define BTP_MESH_EV_OUT_NUMBER_ACTION    0x80

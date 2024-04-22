@@ -7,7 +7,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define MESH_LOG_MODULE BLE_MESH_PROXY_LOG
+#define BLE_NPL_LOG_MODULE BLE_MESH_PROXY_LOG
+#include <nimble/nimble_npl_log.h>
 
 #include "mesh/slist.h"
 #include "mesh/mesh.h"
@@ -727,10 +728,13 @@ int bt_mesh_proxy_gatt_disable(void)
 void bt_mesh_proxy_addr_add(struct os_mbuf *buf, uint16_t addr)
 {
 	struct bt_mesh_proxy_client *client;
-	struct bt_mesh_proxy_role *cli =
-		CONTAINER_OF(buf, struct bt_mesh_proxy_role, buf);
+	struct bt_mesh_proxy_role *cli;
+
+	cli = bt_mesh_proxy_role_find_with_buf(buf);
+	assert(cli);
 
 	client = find_client(cli->conn_handle);
+	assert(client);
 
 	BT_DBG("filter_type %u addr 0x%04x", client->filter_type, addr);
 
@@ -1003,6 +1007,8 @@ int bt_mesh_proxy_init(void)
 #endif
 		clients[i].conn_handle = 0xffff;
 	}
+
+	bt_mesh_proxy_msg_init();
 
 	resolve_svc_handles();
 
