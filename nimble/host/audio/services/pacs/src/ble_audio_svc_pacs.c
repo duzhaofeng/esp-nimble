@@ -29,6 +29,7 @@ static struct available_ctx {
     uint16_t conn_handle;
     uint16_t ble_svc_audio_pacs_avail_sink_contexts;
     uint16_t ble_svc_audio_pacs_avail_source_contexts;
+    uint8_t val_changed;
 }  ble_svc_audio_pacs_avail_contexts[MYNEWT_VAL(BLE_MAX_CONNECTIONS)] = {
     [0 ... MYNEWT_VAL(BLE_MAX_CONNECTIONS) - 1] = {
         .conn_handle = BLE_HS_CONN_HANDLE_NONE,
@@ -253,17 +254,30 @@ static int
 ble_svc_audio_pacs_avail_audio_ctx_read_access(uint16_t conn_handle,
                                                struct ble_gatt_access_ctxt *ctxt)
 {
-    struct available_ctx *avail_ctx;
+    struct available_ctx *avail_ctx = NULL;
     uint8_t *buf;
+    int i;
 
-    avail_ctx = ble_svc_audio_pacs_find_avail_ctx(conn_handle);
-    if (!avail_ctx) {
-        return BLE_HS_ENOENT;
+    if (conn_handle == BLE_HS_CONN_HANDLE_NONE) {
+        for (i = 0; i < MYNEWT_VAL(BLE_MAX_CONNECTIONS); i++) {
+            if (ble_svc_audio_pacs_avail_contexts[i].val_changed) {
+                avail_ctx = &ble_svc_audio_pacs_avail_contexts[i];
+                avail_ctx->val_changed = false;
+                break;
+            }
+        }
+    } else {
+        avail_ctx = ble_svc_audio_pacs_find_avail_ctx(conn_handle);
     }
 
     buf = os_mbuf_extend(ctxt->om, 4);
     if (buf == NULL) {
         return BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
+
+    if (!avail_ctx) {
+        put_le32(buf + 0, 0);
+        return 0;
     }
 
     put_le16(buf + 0, avail_ctx->ble_svc_audio_pacs_avail_sink_contexts);
@@ -372,7 +386,7 @@ pac_notify(uint16_t chrc_uuid)
 }
 
 int
-ble_svc_audio_pacs_set(uint8_t flags, struct ble_svc_audio_pacs_set_param *param)
+ble_svc_audio_pacs_set(uint8_t flags, const struct ble_svc_audio_pacs_set_param *param)
 {
     int rc;
 
@@ -407,8 +421,14 @@ ble_svc_audio_pacs_avail_contexts_set(uint16_t conn_handle,
         return BLE_HS_ENOENT;
     }
 
+    if ((sink_contexts & ble_svc_audio_pacs_sup_sink_contexts) != sink_contexts ||
+        (source_contexts & ble_svc_audio_pacs_sup_source_contexts) != source_contexts) {
+        return BLE_HS_ENOTSUP;
+    }
+
     avail_ctx->ble_svc_audio_pacs_avail_sink_contexts = sink_contexts;
     avail_ctx->ble_svc_audio_pacs_avail_source_contexts = source_contexts;
+    avail_ctx->val_changed = true;
 
     return pac_notify(BLE_SVC_AUDIO_PACS_CHR_UUID16_AVAILABLE_AUDIO_CONTEXTS);
 }
