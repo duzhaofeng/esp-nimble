@@ -15,23 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-<<<<<<< HEAD:nimble/host/services/cts/pkg.yml
-pkg.name: nimble/host/services/cts
-pkg.description: Current Time Service
-pkg.author: "Apache Mynewt <dev@mynewt.apache.org>"
-pkg.homepage: "http://mynewt.apache.org/"
-pkg.keywords:
-    - ble
-    - bluetooth
-    - cts
-    - nimble
-
-pkg.deps:
-    - nimble/host
-
-pkg.init:
-    ble_svc_cts_init: 'MYNEWT_VAL(BLE_SVC_CTS_SYSINIT_STAGE)'
-=======
 pkg.name: nimble/host/audio/services/pacs/lc3
 pkg.description: LC3 codec entry for Published Audio Capabilities Service
 pkg.author: "Apache Mynewt <dev@mynewt.apache.org>"
@@ -49,4 +32,3 @@ pkg.deps:
 pkg.init:
   ble_svc_audio_pacs_lc3_init:
     - $after:ble_svc_audio_pacs_init
->>>>>>> 1e9ba4655421a3e3322d497124c17c0222abc865:nimble/host/audio/services/pacs/lc3/pkg.yml
