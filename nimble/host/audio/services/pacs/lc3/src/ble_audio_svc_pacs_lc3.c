@@ -17,6 +17,8 @@
  * under the License.
  */
 
+#include "sysinit/sysinit.h"
+#include "syscfg/syscfg.h"
 #include "audio/ble_audio_codec.h"
 #include "services/pacs/ble_audio_svc_pacs.h"
 #include "syscfg/syscfg.h"
@@ -25,7 +27,7 @@
 /* Below is to unmangle comma separated Metadata octets from MYNEWT_VAL */
 #define _Args(...) __VA_ARGS__
 #define STRIP_PARENS(X) X
-#define UNMANGLE_MYNEWT_VAL(X) STRIP_PARENS(_Args X)
+#define UNMANGLE_MYNEWT_VAL(X) STRIP_PARENS(_Args(X))
 
 #define BLE_SVC_AUDIO_PACS_LC3_CODEC_ID             0x06
 

@@ -16,7 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
+#include "sysinit/sysinit.h"
+#include "syscfg/syscfg.h"
 #include "audio/ble_audio.h"
 #include "host/ble_hs.h"
 #include "host/ble_gatt.h"
