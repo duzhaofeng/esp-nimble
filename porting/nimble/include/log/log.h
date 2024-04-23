@@ -17,28 +17,18 @@
  * under the License.
  */
 
-#ifndef _NIMBLE_NPL_OS_LOG_H_
-#define _NIMBLE_NPL_OS_LOG_H_
+#ifndef __LOG_H__
+#define __LOG_H__
 
-#include "modlog/modlog.h"
-#include "log/log.h"
-
-/* Only include the logcfg header if this version of newt can generate it. */
-#if MYNEWT_VAL(NEWT_FEATURE_LOGCFG)
-#include "logcfg/logcfg.h"
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-#include <stdarg.h>
+struct log {
+};
 
-/* Example on how to use macro to generate module logging functions */
-#define BLE_NPL_LOG_IMPL(lvl) \
-        static inline void _BLE_NPL_LOG_CAT(BLE_NPL_LOG_MODULE, \
-                _BLE_NPL_LOG_CAT(_, lvl))(const char *fmt, ...)\
-        {                               \
-            va_list args;               \
-            va_start(args, fmt);        \
-            esp_log_writev(_BLE_NPL_LOG_CAT(ESP_LOG_, lvl), "NimBLE", fmt, args);          \
-            va_end(args);               \
-        }
+#ifdef __cplusplus
+}
+#endif
 
-#endif  /* _NIMBLE_NPL_OS_LOG_H_ */
+#endif /* __LOG_H__ */

@@ -1980,21 +1980,6 @@ struct ble_gap_periodic_sync_params {
 int ble_gap_periodic_adv_configure(uint8_t instance,
                                    const struct ble_gap_periodic_adv_params *params);
 
-#if MYNEWT_VAL(BLE_PERIODIC_ADV_ENH)
-/**
- * Start periodic advertising for specified advertising instance.
- *
- * @param instance            Instance ID
- * @param params              Additional arguments specifying the particulars
- *                            of periodic advertising.
- *
- * @return              0 on success, error code on failure.
- */
-int
-ble_gap_periodic_adv_start(uint8_t instance,
-                           const struct ble_gap_periodic_adv_start_params *params);
-
-#else
 /**
  * Start periodic advertising for specified advertising instance.
  *
@@ -2018,22 +2003,6 @@ ble_gap_periodic_adv_start(uint8_t instance,
  */
 int ble_gap_periodic_adv_stop(uint8_t instance);
 
-#if MYNEWT_VAL(BLE_PERIODIC_ADV_ENH)
-/**
- * Configures the data to include in periodic advertisements for specified
- * advertising instance.
- *
- * @param instance            Instance ID
- * @param data                Chain containing the periodic advertising data.
- * @param params              Additional arguments specifying the particulars
-                             of periodic advertising data.
- *
- * @return          0 on success or error code on failure.
- */
-int ble_gap_periodic_adv_set_data(uint8_t instance,
-                                  struct os_mbuf *data,
-                                  struct ble_gap_periodic_adv_set_data_params *params);
-#else
 /**
  * Configures the data to include in periodic advertisements for specified
  * advertising instance.
@@ -2089,21 +2058,6 @@ int ble_gap_periodic_adv_sync_create_cancel(void);
 int ble_gap_periodic_adv_sync_terminate(uint16_t sync_handle);
 
 #if MYNEWT_VAL(BLE_PERIODIC_ADV_SYNC_TRANSFER)
-#if MYNEWT_VAL(BLE_PERIODIC_ADV_ENH)
-/**
- * Disable or enable periodic reports for specified sync.
- *
- * @param sync_handle        Handle identifying synchronization.
- * @param enable             If reports should be enabled.
- * @param params              Additional arguments specifying the particulars
- *                            of periodic reports.
- *
- * @return                   0 on success; nonzero on failure.
- */
-int ble_gap_periodic_adv_sync_reporting(uint16_t sync_handle,
-                                        bool enable,
-                                        const struct ble_gap_periodic_adv_sync_reporting_params *params);
-#else
 /**
  * Disable or enable periodic reports for specified sync.
  *

@@ -1860,113 +1860,6 @@ ble_att_svr_rx_read_mult_var(uint16_t conn_handle, uint16_t cid, struct os_mbuf 
     err_handle = 0;
     att_err = 0;
 
-    rc = ble_att_svr_build_read_mult_rsp_var(conn_handle, cid, rxom, &txom, &att_err,
-                                         &err_handle);
-
-    return ble_att_svr_tx_rsp(conn_handle, cid, rc, txom,
-                              BLE_ATT_OP_READ_MULT_VAR_REQ,
-                              att_err, err_handle);
-}
-
-static int
-ble_att_svr_build_read_mult_rsp_var(uint16_t conn_handle,
-                                    struct os_mbuf **rxom,
-                                    struct os_mbuf **out_txom,
-                                    uint8_t *att_err,
-                                    uint16_t *err_handle)
-{
-    struct os_mbuf *txom;
-    uint16_t handle;
-    uint16_t mtu;
-    uint16_t tuple_len;
-    struct os_mbuf *tmp = NULL;
-    int rc;
-
-    mtu = ble_att_mtu(conn_handle);
-
-    rc = ble_att_svr_pkt(rxom, &txom, att_err);
-    if (rc != 0) {
-        *err_handle = 0;
-        goto done;
-    }
-
-    if (ble_att_cmd_prepare(BLE_ATT_OP_READ_MULT_VAR_RSP, 0, txom) == NULL) {
-        *att_err = BLE_ATT_ERR_INSUFFICIENT_RES;
-        *err_handle = 0;
-        rc = BLE_HS_ENOMEM;
-        goto done;
-    }
-
-    tmp = os_msys_get_pkthdr(2, 0);
-
-    /* Iterate through requested handles, reading the corresponding attribute
-     * for each.  Stop when there are no more handles to process, or the
-     * response is full.
-     */
-    while (OS_MBUF_PKTLEN(*rxom) >= 2 && OS_MBUF_PKTLEN(txom) < mtu) {
-        /* Ensure the full 16-bit handle is contiguous at the start of the
-         * mbuf.
-         */
-        rc = ble_att_svr_pullup_req_base(rxom, 2, att_err);
-        if (rc != 0) {
-            *err_handle = 0;
-            goto done;
-        }
-
-        /* Extract the 16-bit handle and strip it from the front of the
-         * mbuf.
-         */
-        handle = get_le16((*rxom)->om_data);
-        os_mbuf_adj(*rxom, 2);
-
-        rc = ble_att_svr_read_handle(conn_handle, handle, 0, tmp, att_err);
-        if (rc != 0) {
-            *err_handle = handle;
-            goto done;
-        }
-        tuple_len = OS_MBUF_PKTLEN(tmp);
-        rc = os_mbuf_append(txom, &tuple_len, sizeof(tuple_len));
-        if (rc != 0) {
-            *err_handle = handle;
-            goto done;
-        }
-        if (tuple_len != 0) {
-            rc = os_mbuf_appendfrom(txom, tmp, 0, tuple_len);
-            if (rc != 0) {
-                *err_handle = handle;
-                goto done;
-            }
-            os_mbuf_adj(tmp, tuple_len);
-        }
-    }
-    rc = 0;
-
-done:
-
-    if (tmp) {
-        os_mbuf_free_chain(tmp);
-    }
-    *out_txom = txom;
-    return rc;
-}
-
-int
-ble_att_svr_rx_read_mult_var(uint16_t conn_handle, struct os_mbuf **rxom)
-{
-#if !MYNEWT_VAL(BLE_ATT_SVR_READ_MULT)
-    return BLE_HS_ENOTSUP;
-#endif
-
-    struct os_mbuf *txom;
-    uint16_t err_handle;
-    uint8_t att_err;
-    int rc;
-
-    /* Initialize some values in case of early error. */
-    txom = NULL;
-    err_handle = 0;
-    att_err = 0;
-
 #if MYNEWT_VAL(BLE_GATT_CACHING)
     ble_hs_lock();
     if((ble_att_svr_get_csfs(conn_handle)[0] & 1)
@@ -1982,13 +1875,13 @@ ble_att_svr_rx_read_mult_var(uint16_t conn_handle, struct os_mbuf **rxom)
     ble_hs_unlock();
 #endif
 
-    rc = ble_att_svr_build_read_mult_rsp_var(conn_handle, rxom, &txom, &att_err,
+    rc = ble_att_svr_build_read_mult_rsp_var(conn_handle, cid, rxom, &txom, &att_err,
                                          &err_handle);
 
 #if MYNEWT_VAL(BLE_GATT_CACHING)
 done:
 #endif
-    return ble_att_svr_tx_rsp(conn_handle, rc, txom,
+    return ble_att_svr_tx_rsp(conn_handle, cid, rc, txom,
                               BLE_ATT_OP_READ_MULT_VAR_REQ,
                               att_err, err_handle);
 }
@@ -2448,7 +2341,7 @@ ble_att_svr_rx_write_no_rsp(uint16_t conn_handle, uint16_t cid, struct os_mbuf *
 }
 
 int
-ble_att_svr_rx_signed_write(uint16_t conn_handle, struct os_mbuf **rxom)
+ble_att_svr_rx_signed_write(uint16_t conn_handle, uint16_t cid, struct os_mbuf **rxom)
 {
 #if !MYNEWT_VAL(BLE_ATT_SVR_SIGNED_WRITE)
     return BLE_HS_ENOTSUP;

@@ -4107,10 +4107,6 @@ ble_gap_periodic_adv_configure(uint8_t instance,
     return 0;
 }
 
-#if MYNEWT_VAL(BLE_PERIODIC_ADV_ENH)
-int
-ble_gap_periodic_adv_start(uint8_t instance, const struct ble_gap_periodic_adv_start_params *params)
-#else
 int
 ble_gap_periodic_adv_start(uint8_t instance, const struct ble_gap_periodic_adv_start_params *params)
 {
@@ -4304,7 +4300,6 @@ ble_gap_periodic_adv_set_data_validate(uint8_t instance,
     return 0;
 }
 
-#if MYNEWT_VAL(BLE_PERIODIC_ADV_ENH)
 int
 ble_gap_periodic_adv_set_data(uint8_t instance,
                               struct os_mbuf *data,

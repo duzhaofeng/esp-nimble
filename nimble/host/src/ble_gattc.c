@@ -3449,72 +3449,6 @@ ble_gattc_read_mult_cb_var(struct ble_gattc_proc *proc, int status,
     return 0;
 }
 
-static int
-ble_gattc_read_mult_cb_var(struct ble_gattc_proc *proc, int status,
-                           uint16_t att_handle, struct os_mbuf **om)
-{
-    struct ble_gatt_attr attr[proc->read_mult.num_handles];
-    int rc;
-    int i;
-    uint16_t attr_len;
-
-    if (proc->read_mult.cb_mult == NULL) {
-        return 0;
-    }
-
-    memset(attr, 0, sizeof(*attr));
-
-    for (i = 0; i < proc->read_mult.num_handles; i++) {
-        attr[i].handle = proc->read_mult.handles[i];
-        attr[i].offset = 0;
-        if (om == NULL || OS_MBUF_PKTLEN(*om) == 0) {
-            continue;
-        }
-
-        *om = os_mbuf_pullup(*om, 2);
-        assert(*om);
-
-        attr_len = get_le16((*om)->om_data);
-
-        os_mbuf_adj(*om, 2);
-
-        if (attr_len > BLE_ATT_ATTR_MAX_LEN) {
-            /*TODO Figure out what to do here */
-            break;
-        }
-
-        attr[i].om = os_msys_get_pkthdr(attr_len, 0);
-        if (!attr[i].om) {
-            /*TODO Figure out what to do here */
-            break;
-        }
-
-        rc = os_mbuf_appendfrom(attr[i].om, *om, 0, attr_len);
-        if (rc) {
-            /*TODO Figure out what to do here */
-            break;
-        }
-
-        os_mbuf_adj(*om, attr_len);
-    }
-
-    /*FIXME Testing assert */
-    assert(i == proc->read_mult.num_handles);
-
-    proc->read_mult.cb_mult(proc->conn_handle,
-                    ble_gattc_error(status, att_handle), &attr[0],
-                    i,
-                    proc->read_mult.cb_arg);
-
-    for (i = 0; i < proc->read_mult.num_handles; i++) {
-        if (attr[i].om != NULL) {
-            os_mbuf_free_chain(attr[i].om);
-        }
-    }
-
-    return 0;
-}
-
 
 /**
  * Calls a read-multiple-characteristics proc's callback with the specified
@@ -3759,6 +3693,7 @@ ble_gattc_signed_write(uint16_t conn_handle, uint16_t attr_handle,
 #endif
 
     int rc;
+    uint16_t cid;
     struct ble_store_value_sec value_sec;
     struct ble_store_key_sec key_sec;
     struct ble_gap_conn_desc desc;
@@ -3793,7 +3728,9 @@ ble_gattc_signed_write(uint16_t conn_handle, uint16_t attr_handle,
     /* Converting the csrk to little endian */
     swap_buf(csrk, value_sec.csrk, 16);
 
-    rc = ble_att_clt_tx_signed_write_cmd(conn_handle, attr_handle,
+    cid = ble_eatt_get_available_chan_cid(conn_handle, BLE_GATT_OP_WRITE);
+
+    rc = ble_att_clt_tx_signed_write_cmd(conn_handle, cid, attr_handle,
                                          csrk, value_sec.sign_counter, txom);
     if (rc != 0) {
         goto err;

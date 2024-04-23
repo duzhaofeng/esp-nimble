@@ -777,7 +777,7 @@ ble_att_clt_rx_write(uint16_t conn_handle, uint16_t cid, struct os_mbuf **rxom)
 }
 
 int
-ble_att_clt_tx_signed_write_cmd(uint16_t conn_handle, uint16_t handle, uint8_t *csrk,
+ble_att_clt_tx_signed_write_cmd(uint16_t conn_handle, uint16_t cid, uint16_t handle, uint8_t *csrk,
                                 uint32_t counter, struct os_mbuf *txom)
 {
 #if !NIMBLE_BLE_ATT_CLT_SIGNED_WRITE
@@ -864,7 +864,7 @@ ble_att_clt_tx_signed_write_cmd(uint16_t conn_handle, uint16_t handle, uint8_t *
 
     if(message != NULL) nimble_platform_mem_free(message);
     os_mbuf_concat(txom2, txom);
-    return ble_att_tx(conn_handle, txom2);
+    return ble_att_tx(conn_handle, cid, txom2);
 err:
     if(message != NULL) nimble_platform_mem_free(message);
     os_mbuf_free_chain(txom2);

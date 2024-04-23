@@ -711,9 +711,6 @@ int ble_gattc_read_mult(uint16_t conn_handle, const uint16_t *handles,
                         uint8_t num_handles, ble_gatt_attr_fn *cb,
                         void *cb_arg);
 
-int ble_gattc_read_mult_var(uint16_t conn_handle, const uint16_t *handles,
-                            uint8_t num_handles, ble_gatt_attr_mult_fn *cb,
-                            void *cb_arg);
 
 /**
  * Initiates GATT procedure: Read Multiple Variable Length Characteristic Values.
@@ -732,6 +729,7 @@ int ble_gattc_read_mult_var(uint16_t conn_handle, const uint16_t *handles,
 int ble_gattc_read_mult_var(uint16_t conn_handle, const uint16_t *handles,
                             uint8_t num_handles, ble_gatt_attr_mult_fn *cb,
                             void *cb_arg);
+
 /**
  * Initiates GATT procedure: Write Without Response.  This function consumes
  * the supplied mbuf regardless of the outcome.
